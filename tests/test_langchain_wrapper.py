@@ -18,8 +18,14 @@ from llm_keypool.langchain_wrapper import AggregatorChat  # noqa: E402
 # --- helpers ---
 
 def _make_complete_result(text="hello", tokens=42, provider="groq", model="llama-3.3-70b"):
-    from types import SimpleNamespace
-    result = SimpleNamespace(text=text, tokens_used=tokens, error=None, remaining_requests=100)
+    from llm_keypool.providers.base import CompletionResult
+    result = CompletionResult(
+        text=text,
+        tokens_used=tokens,
+        error=None,
+        remaining_requests=100,
+        was_429=False,
+    )
     key_data = {
         "provider": provider, "model": model, "key_id": 1,
         "requests_today": 5, "tokens_used_today": 200,
@@ -28,8 +34,14 @@ def _make_complete_result(text="hello", tokens=42, provider="groq", model="llama
 
 
 def _make_error_result(error="quota exceeded"):
-    from types import SimpleNamespace
-    result = SimpleNamespace(text=None, tokens_used=0, error=error)
+    from llm_keypool.providers.base import CompletionResult
+    result = CompletionResult(
+        text="",
+        tokens_used=0,
+        error=error,
+        remaining_requests=0,
+        was_429=False,
+    )
     key_data = {"provider": "groq", "model": "llama-3.3-70b"}
     return result, key_data
 
@@ -139,7 +151,6 @@ class TestAggregatorChat:
         assert meta["key_id"] == 1
 
     def test_pool_status_returns_list(self, tmp_path, monkeypatch):
-        import os
         monkeypatch.setenv("LLM_KEYPOOL_DB", str(tmp_path / "ps_test.db"))
         from llm_keypool.key_store import KeyStore
         store = KeyStore()
@@ -154,3 +165,67 @@ class TestAggregatorChat:
         assert "tokens_used_today" in status[0]
         assert "is_available" in status[0]
         assert status[0]["is_available"] is True
+
+
+# ===================================================================
+# Extended tests: bring coverage to 100% in langchain_wrapper.py
+# ===================================================================
+
+
+class TestBuildRotator:
+    """_build_rotator — creates Rotator from provider config (lines 44-49)."""
+
+    def test_build_rotator_creates_instance(self, tmp_path, monkeypatch):
+        """_build_rotator returns a Rotator with correct settings."""
+        monkeypatch.setenv("LLM_KEYPOOL_DB", str(tmp_path / "rot_test.db"))
+        from llm_keypool.langchain_wrapper import _build_rotator
+
+        rotator = _build_rotator(rotate_every=3)
+        assert rotator is not None
+        assert rotator.rotate_every == 3
+        assert rotator.store is not None
+
+
+class TestRunAsyncWithLoop:
+    """_run_async with running event loop — concurrent.futures path (lines 70-74)."""
+
+    @pytest.mark.asyncio
+    async def test_run_async_from_running_loop(self):
+        """_run_async uses concurrent.futures when a loop is already running."""
+        from llm_keypool.langchain_wrapper import _run_async
+
+        async def dummy_coro():
+            return 42
+
+        result = _run_async(dummy_coro())
+        assert result == 42
+
+
+class TestCurrentKey:
+    """current_key method (line 138)."""
+
+    @patch("llm_keypool.langchain_wrapper._build_rotator")
+    def test_current_key_returns_peek(self, mock_build):
+        """current_key returns result of rotator.peek_current_key."""
+        mock_rotator = MagicMock()
+        expected = {"provider": "groq", "key_id": 1, "model": "llama-3.3-70b"}
+        mock_rotator.peek_current_key.return_value = expected
+        mock_build.return_value = mock_rotator
+
+        chat = AggregatorChat()
+        result = chat.current_key()
+
+        assert result == expected
+        mock_rotator.peek_current_key.assert_called_once_with(chat.capabilities)
+
+    @patch("llm_keypool.langchain_wrapper._build_rotator")
+    def test_current_key_returns_none(self, mock_build):
+        """current_key returns None when no key is available."""
+        mock_rotator = MagicMock()
+        mock_rotator.peek_current_key.return_value = None
+        mock_build.return_value = mock_rotator
+
+        chat = AggregatorChat()
+        result = chat.current_key()
+
+        assert result is None

@@ -1,5 +1,4 @@
-"""
-Rate-limit header parsing and cooldown derivation per provider.
+"""Rate-limit header parsing and cooldown derivation per provider.
 
 Confirmed headers from live API probes (real keys, 2026-04-29):
 
@@ -15,26 +14,35 @@ Confirmed headers from live API probes (real keys, 2026-04-29):
              no reset timestamps
 
   OpenRouter: no rate-limit headers observed on live probe
+  GitHub Models: x-ratelimit-remaining-requests, x-ratelimit-remaining-tokens
   Others:    untested; fall back to config-driven strategy
+
+Providers without custom extractors (Google, Cohere, Cloudflare, SambaNova,
+NVIDIA NIM, Zhipu, Ollama Cloud, Kilo Gateway, Pollinations, OVH AI, LLM7,
+HuggingFace Router, OpenCode Zen, Agnes AI, Interfaze) use the config-driven
+cooldown_fallback strategy from providers.json.
 """
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import httpx
 
 # Matches Groq-style duration strings: "1m26.4s", "170ms", "2h5m", "30s"
 _DURATION_RE = re.compile(
     r"^(?:(\d+(?:\.\d+)?)h)?"
     r"(?:(\d+(?:\.\d+)?)m(?!s))?"
     r"(?:(\d+(?:\.\d+)?)s)?"
-    r"(?:(\d+(?:\.\d+)?)ms)?$"
+    r"(?:(\d+(?:\.\d+)?)ms)?$",
 )
 
 _RL_PREFIXES = ("x-ratelimit", "ratelimit", "retry-after")
 
 
-def collect_rl_headers(raw_headers) -> dict:
+def collect_rl_headers(raw_headers: dict[str, Any] | httpx.Headers) -> dict[str, Any]:
     """Extract all rate-limit-related headers as a lowercase-keyed dict."""
     return {
         k.lower(): v
@@ -43,28 +51,32 @@ def collect_rl_headers(raw_headers) -> dict:
     }
 
 
-def _parse_duration_str(s: str) -> Optional[float]:
+def _parse_duration_str(s: str) -> float | None:
     """Parse Groq duration strings to seconds. '1m26.4s'->86.4, '170ms'->0.17."""
     m = _DURATION_RE.match(s.strip())
     if not m or not any(m.groups()):
         return None
     h, mins, secs, ms = m.groups()
     total = 0.0
-    if h:    total += float(h) * 3600
-    if mins: total += float(mins) * 60
-    if secs: total += float(secs)
-    if ms:   total += float(ms) / 1000
+    if h:
+        total += float(h) * 3600
+    if mins:
+        total += float(mins) * 60
+    if secs:
+        total += float(secs)
+    if ms:
+        total += float(ms) / 1000
     return total if total > 0 else None
 
 
 def _in(seconds: float) -> str:
-    return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
+    return (datetime.now(UTC) + timedelta(seconds=seconds)).isoformat()
 
 
 def _next_utc_midnight() -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return (now + timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
+        hour=0, minute=0, second=0, microsecond=0,
     ).isoformat()
 
 
@@ -73,7 +85,7 @@ def _next_utc_midnight() -> str:
 # Each returns an ISO cooldown_until timestamp or None (no cooldown needed).
 # ---------------------------------------------------------------------------
 
-def _groq(headers: dict, was_429: bool) -> Optional[str]:
+def _groq(headers: dict[str, Any], was_429: bool) -> str | None:  # noqa: C901, FBT001
     # On 429, prefer explicit retry-after first
     if was_429:
         ra = headers.get("retry-after")
@@ -113,7 +125,7 @@ def _groq(headers: dict, was_429: bool) -> Optional[str]:
     return None
 
 
-def _cerebras(headers: dict, was_429: bool) -> Optional[str]:
+def _cerebras(headers: dict[str, Any], was_429: bool) -> str | None:  # noqa: FBT001
     # Check dimensions from longest to shortest; first exhausted wins
     checks = [
         ("x-ratelimit-remaining-requests-day",    _next_utc_midnight),
@@ -135,7 +147,7 @@ def _cerebras(headers: dict, was_429: bool) -> Optional[str]:
     return None
 
 
-def _mistral(headers: dict, was_429: bool) -> Optional[str]:
+def _mistral(headers: dict[str, Any], was_429: bool) -> str | None:  # noqa: FBT001
     # Mistral uses "req" not "requests" in header names
     rem = headers.get("x-ratelimit-remaining-req-minute")
     if rem is not None:
@@ -151,16 +163,46 @@ def _mistral(headers: dict, was_429: bool) -> Optional[str]:
     return None
 
 
+def _github_models(headers: dict[str, Any], was_429: bool) -> str | None:  # noqa: FBT001
+    # GitHub Models uses standard x-ratelimit headers
+    remaining = headers.get("x-ratelimit-remaining-requests")
+    if remaining is not None:
+        try:
+            if int(remaining) == 0:
+                return _next_utc_midnight()
+        except (ValueError, TypeError):
+            pass
+    if was_429:
+        return _in(60)
+    return None
+
+
+def _interfaze(headers: dict[str, Any], was_429: bool) -> str | None:  # noqa: FBT001
+    """Parse Interfaze rate-limit headers: x-ratelimit-remaining-{requests,tokens}."""
+    remaining = headers.get("x-ratelimit-remaining-requests")
+    if remaining is not None:
+        try:
+            if int(remaining) == 0:
+                return _in(60)
+        except (ValueError, TypeError):
+            pass
+    if was_429:
+        return _in(60)
+    return None
+
+
 _EXTRACTORS = {
-    "groq":     _groq,
-    "cerebras": _cerebras,
-    "mistral":  _mistral,
+    "groq":          _groq,
+    "cerebras":      _cerebras,
+    "mistral":       _mistral,
+    "github_models": _github_models,
+    "interfaze": _interfaze,
 }
 
 
-def extract_cooldown(provider: str, headers: dict, was_429: bool) -> Optional[str]:
-    """
-    Return ISO 8601 cooldown_until derived from response headers, or None.
+def extract_cooldown(provider: str, headers: dict[str, Any], was_429: bool) -> str | None:  # noqa: FBT001
+    """Return ISO 8601 cooldown_until derived from response headers, or None.
+
     None means either headers don't indicate exhaustion, or no extractor exists
     for this provider (caller should apply config-driven fallback).
     """
@@ -170,7 +212,7 @@ def extract_cooldown(provider: str, headers: dict, was_429: bool) -> Optional[st
     return extractor(headers, was_429)
 
 
-def extract_remaining_requests(provider: str, headers: dict) -> Optional[int]:
+def extract_remaining_requests(provider: str, headers: dict[str, Any]) -> int | None:
     """Most relevant 'remaining requests' count for CompletionResult.remaining_requests."""
     if provider == "groq":
         key = "x-ratelimit-remaining-requests"
@@ -178,6 +220,8 @@ def extract_remaining_requests(provider: str, headers: dict) -> Optional[int]:
         key = "x-ratelimit-remaining-requests-day"
     elif provider == "mistral":
         key = "x-ratelimit-remaining-req-minute"
+    elif provider in ("github_models", "interfaze"):
+        key = "x-ratelimit-remaining-requests"
     else:
         key = "x-ratelimit-remaining-requests"
 

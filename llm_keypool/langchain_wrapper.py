@@ -1,7 +1,6 @@
-"""
-LangChain-compatible wrapper for llm-keypool.
+"""LangChain-compatible wrapper for llm-keypool.
 
-Drop into any LangChain pipeline as a chat model:
+Drop into any LangChain pipeline as a chat model::
 
     from llm_keypool import AggregatorChat
 
@@ -11,6 +10,7 @@ Drop into any LangChain pipeline as a chat model:
     )
 
 Config examples:
+
     # general inference
     AggregatorChat(capabilities=["general_purpose"])
 
@@ -28,26 +28,28 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
+from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 
 _CONFIG_PATH = Path(__file__).parent / "config" / "providers.json"
 
 
-def _build_rotator(rotate_every: int = 5):
-    from .key_store import KeyStore
-    from .rotator import Rotator
-    with open(_CONFIG_PATH) as f:
+def _build_rotator(rotate_every: int = 5) -> Any:  # noqa: ANN401
+    """Build a Rotator from the provider config file."""
+    from .key_store import KeyStore  # noqa: PLC0415
+    from .rotator import Rotator  # noqa: PLC0415
+
+    with _CONFIG_PATH.open() as f:
         configs = json.load(f)["providers"]
     return Rotator(KeyStore(), configs, rotate_every=rotate_every)
 
 
-def _msgs_to_dicts(messages: list[BaseMessage]) -> list[dict]:
+def _msgs_to_dicts(messages: list[BaseMessage]) -> list[dict[str, Any]]:
     role_map = {
         "human": "user",
         "ai": "assistant",
@@ -61,11 +63,12 @@ def _msgs_to_dicts(messages: list[BaseMessage]) -> list[dict]:
     return result
 
 
-def _run_async(coro):
+def _run_async(coro: Any) -> Any:  # noqa: ANN401
     """Run async coroutine from sync context safely."""
     try:
-        loop = asyncio.get_running_loop()
-        import concurrent.futures
+        asyncio.get_running_loop()
+        import concurrent.futures  # noqa: PLC0415
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             future = pool.submit(asyncio.run, coro)
             return future.result()
@@ -74,8 +77,8 @@ def _run_async(coro):
 
 
 class AggregatorChat(BaseChatModel):
-    """
-    LangChain ChatModel backed by llm-keypool.
+    """LangChain ChatModel backed by llm-keypool.
+
     Handles key selection, rotation, 429 retries, and audit logging transparently.
 
     Parameters
@@ -93,30 +96,24 @@ class AggregatorChat(BaseChatModel):
         Sampling temperature. Default 0.7.
     rotate_every : int
         Number of requests before rotating to the next key. Default 5.
-    category : str
-        Deprecated. Use capabilities instead.
+
     """
 
-    capabilities: list[str] = ["general_purpose"]
+    capabilities: list[str] = ["general_purpose"]  # noqa: RUF012
     subscriber_id: str = "unknown"
     max_tokens: int = 4096
     temperature: float = 0.7
     rotate_every: int = 5
 
-    # deprecated - kept for backward compat with mdcore aggregator_category config
-    category: str = ""
-
     _rotator: Any = None
 
     class Config:
+        """Pydantic config: allow arbitrary types."""
+
         arbitrary_types_allowed = True
 
-    def model_post_init(self, __context: Any) -> None:
-        # if category passed and capabilities is still default, use category
-        if self.category and self.capabilities == ["general_purpose"]:
-            object.__setattr__(self, "capabilities", [self.category])
-
-    def _get_rotator(self):
+    def _get_rotator(self) -> Any:  # noqa: ANN401
+        """Lazy-init and return the Rotator instance."""
         if self._rotator is None:
             self._rotator = _build_rotator(self.rotate_every)
         return self._rotator
@@ -126,28 +123,28 @@ class AggregatorChat(BaseChatModel):
         return "llm_keypool"
 
     @property
-    def _identifying_params(self) -> dict:
+    def _identifying_params(self) -> dict[str, Any]:
         return {
             "model": f"keypool/{','.join(self.capabilities)}",
             "capabilities": self.capabilities,
             "subscriber_id": self.subscriber_id,
         }
 
-    def current_key(self) -> dict | None:
-        """
-        Return the key that would be selected for the next request.
+    def current_key(self) -> dict[str, Any] | None:
+        """Return the key that would be selected for the next request.
+
         Does not make any API call or mutate rotation state.
         """
-        return self._get_rotator().peek_current_key(self.capabilities)
+        return self._get_rotator().peek_current_key(self.capabilities)  # type: ignore[no-any-return]
 
-    def pool_status(self) -> list[dict]:
-        """
-        Return current quota state for all active keys matching capabilities.
+    def pool_status(self) -> list[dict[str, Any]]:
+        """Return current quota state for all active keys matching capabilities.
+
         Does not make any API call.
         """
-        from .key_store import KeyStore
+        from .key_store import KeyStore  # noqa: PLC0415
         store = KeyStore()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         keys = store.get_active_keys(self.capabilities)
         result = []
         for k in keys:
@@ -168,20 +165,21 @@ class AggregatorChat(BaseChatModel):
     def _generate(
         self,
         messages: list[BaseMessage],
-        stop: Optional[list[str]] = None,
-        run_manager=None,
-        **kwargs,
+        stop: list[str] | None = None,
+        run_manager: Any | None = None,  # noqa: ANN401
+        **kwargs: Any,  # noqa: ANN401
     ) -> ChatResult:
-        return _run_async(self._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs))
+        return _run_async(self._agenerate(messages, stop=stop, run_manager=run_manager, **kwargs))  # type: ignore[no-any-return]
 
     async def _agenerate(
         self,
         messages: list[BaseMessage],
-        stop: Optional[list[str]] = None,
-        run_manager=None,
-        **kwargs,
+        stop: list[str] | None = None,  # noqa: ARG002
+        run_manager: Any | None = None,  # noqa: ARG002, ANN401
+        **kwargs: Any,  # noqa: ANN401, ARG002
     ) -> ChatResult:
-        from .providers.dispatch import complete as _complete
+        from .providers.dispatch import complete as _complete  # noqa: PLC0415
+        from .providers.base import CompletionResult
 
         msgs = _msgs_to_dicts(messages)
         result, key_data = await _complete(
@@ -193,9 +191,14 @@ class AggregatorChat(BaseChatModel):
             temperature=self.temperature,
         )
 
-        if result.error:
-            raise RuntimeError(f"llm-keypool error: {result.error}")
+        if not isinstance(result, CompletionResult):
+            raise RuntimeError("llm-keypool error: unexpected streaming result in non-streaming mode")
 
+        if result.error:
+            msg = f"llm-keypool error: {result.error}"
+            raise RuntimeError(msg)
+
+        assert key_data is not None
         model_name = key_data["model"] or key_data["provider"]
         tokens = result.tokens_used or 0
 

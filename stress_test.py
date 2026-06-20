@@ -14,12 +14,10 @@ import json
 import time
 from collections import defaultdict
 from datetime import datetime
-from unittest.mock import AsyncMock, patch
 
 from llm_keypool.key_store import KeyStore
 from llm_keypool.rotator import Rotator
 from llm_keypool.providers.dispatch import complete
-from llm_keypool.providers.base import CompletionResult
 
 PROMPT = [{"role": "user", "content": "Reply in exactly 5 words."}]
 
@@ -67,7 +65,7 @@ async def run(n_requests: int, rotate_every: int, simulate_429_on: set[int] = No
             break
 
         provider = key_data["provider"]
-        model = key_data["model"]
+        # model = key_data["model"]  # unused
         slot = f"[{key_data['cycle_position']}/{key_data['rotate_every']}]"
 
         if prev_provider and provider != prev_provider:
@@ -79,10 +77,6 @@ async def run(n_requests: int, rotate_every: int, simulate_429_on: set[int] = No
         try:
             if i in simulate_429_on:
                 # Inject a fake 429 - dispatch still picks key and handles it
-                fake_429 = CompletionResult(
-                    text="", tokens_used=0, was_429=True,
-                    error="429 simulated", rate_limit_headers={},
-                )
                 rotator.handle_429(key_data["key_id"], key_data["provider"])
                 elapsed = time.monotonic() - t0
                 log("429-SIM", f"req={i:3d} {provider:12}{slot} forced 429 -> cooldown set")
@@ -114,16 +108,16 @@ async def run(n_requests: int, rotate_every: int, simulate_429_on: set[int] = No
             log("EXCEPT", f"req={i:3d} {provider:12}{slot} {elapsed:.2f}s | {str(e)[:60]}")
 
     print("-" * 70)
-    print(f"\nResults:")
+    print("\nResults:")
     print(f"  Rotations:    {rotations}")
     print(f"  Errors:       {errors}")
     print(f"  Total tokens: {total_tokens}")
-    print(f"\nRequests per provider:")
+    print("\nRequests per provider:")
     for p, count in sorted(stats.items(), key=lambda x: -x[1]):
         bar = "█" * count
         print(f"  {p:14} {count:3d}  {bar}")
 
-    print(f"\nFinal key state:")
+    print("\nFinal key state:")
     for k in store.get_all_keys():
         if k["category"] != "general_purpose":
             continue

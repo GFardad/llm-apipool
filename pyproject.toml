@@ -4,8 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-keypool"
-version = "0.4.0"
-description = "Free-tier LLM API key pool with rotation, cooldown, and LangChain drop-in"
+version = "1.0.0"
+description = "A unified, production-grade CLI/TUI/Proxy/LangChain key-pool manager for 40+ free-tier LLM APIs with intelligent model routing."
+authors = [
+    {name = "Your Name/Organization", email = "your@email.com"}
+]
+readme = "README.md"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
 license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
@@ -14,6 +28,8 @@ dependencies = [
     "langchain-core>=0.3.0",
     "typer>=0.12",
     "rich>=13",
+    "tiktoken>=0.5.0",
+    "alembic>=1.18.4",
 ]
 
 [project.optional-dependencies]

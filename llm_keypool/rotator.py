@@ -1,24 +1,32 @@
+"""Key rotation and rate-limit-aware key selection with model quality tiering."""
+
 import json
-import time
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+from typing import Any
 
 from .key_store import KeyStore
 from .providers.headers import extract_cooldown
 
+MONTHS_IN_YEAR = 12
+MIN_QUALITY_TIER = 1
+MAX_QUALITY_TIER = 4
+
 
 def _next_utc_midnight() -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return (now + timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
+        hour=0, minute=0, second=0, microsecond=0,
     ).isoformat()
 
 
 def _next_first_of_month() -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     month = now.month + 1
-    year  = now.year + (1 if month > 12 else 0)
-    month = 1 if month > 12 else month
+    year = now.year + (1 if month > MONTHS_IN_YEAR else 0)
+    month = 1 if month > MONTHS_IN_YEAR else month
     return now.replace(
         year=year, month=month, day=1,
         hour=0, minute=0, second=0, microsecond=0,
@@ -27,7 +35,7 @@ def _next_first_of_month() -> str:
 
 def _rolling(seconds: int) -> Callable[[], str]:
     def _inner() -> str:
-        return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
+        return (datetime.now(UTC) + timedelta(seconds=seconds)).isoformat()
     return _inner
 
 
@@ -40,25 +48,67 @@ _FALLBACK_STRATEGIES = {
 }
 _DEFAULT_FALLBACK = _rolling(60)
 
+# ---------------------------------------------------------------------------
+# Model quality tiers
+# ---------------------------------------------------------------------------
 
-def _fallback_from_config(cfg: dict) -> Callable[[], str]:
+_MODEL_TIER_MAP: dict[str, int] | None = None
+_MODEL_TIER_PATH = Path(__file__).parent / "config" / "model_quality.json"
+
+
+def _load_model_tiers() -> dict[str, int]:
+    """Load model → tier mapping from model_quality.json.
+
+    Returns a dict of {model_name: tier_number (1-4)}.
+    Returns an empty dict if the file is missing or unparseable.
+    """
+    global _MODEL_TIER_MAP  # noqa: PLW0603
+    if _MODEL_TIER_MAP is not None:
+        return _MODEL_TIER_MAP
+    if not _MODEL_TIER_PATH.exists():
+        _MODEL_TIER_MAP = {}
+        return _MODEL_TIER_MAP
+    try:
+        with _MODEL_TIER_PATH.open() as f:
+            data = json.load(f)
+        result: dict[str, int] = {}
+        for tier_key in ("tier1", "tier2", "tier3", "tier4"):
+            tier_num = int(tier_key[-1])  # "tier1" → 1
+            for model in data.get(tier_key, []):
+                result[model] = tier_num
+        _MODEL_TIER_MAP = result
+    except (OSError, json.JSONDecodeError):
+        _MODEL_TIER_MAP = {}
+    return _MODEL_TIER_MAP
+
+
+def get_model_tier(model: str) -> int:
+    """Return the quality tier (1 = best, 4 = worst) for a model name.
+
+    Falls back to tier 4 for unknown / unrecognised models.
+    """
+    tier_map = _load_model_tiers()
+    return tier_map.get(model, 4)
+
+
+def _fallback_from_config(cfg: dict[str, Any]) -> Callable[[], str]:
     key = cfg.get("cooldown_fallback", {}).get("strategy", "rolling_60")
     return _FALLBACK_STRATEGIES.get(key, _DEFAULT_FALLBACK)
 
 
-def _score_key(key: dict, cfg: dict) -> float:
+def _score_key(key: dict[str, Any], cfg: dict[str, Any]) -> float:
     rpd = cfg.get("limits", {}).get("rpd")
     return float(rpd - key["requests_today"]) if rpd else float(-key["requests_today"])
 
 
-def _resolve_model(cfg: dict, cap_key: str) -> str:
+def _resolve_model(cfg: dict[str, Any], cap_key: str) -> str:
     models = cfg.get("models", {})
     if isinstance(models, list):
         return models[0] if models else ""
     if isinstance(models, dict):
         cat_models = models.get(cap_key, [])
         return cat_models[0] if cat_models else ""
-    return cfg.get("default_model", "")
+    return str(cfg.get("default_model", ""))
 
 
 def _cap_key(capabilities: list[str]) -> str:
@@ -67,10 +117,52 @@ def _cap_key(capabilities: list[str]) -> str:
 
 
 class Rotator:
-    def __init__(self, store: KeyStore, provider_configs: dict, rotate_every: int = 5):
+    """Selects best key by model quality tier, handles 429 cooldowns, and rotates evenly."""
+
+    def __init__(
+        self,
+        store: KeyStore,
+        provider_configs: dict[str, Any],
+        rotate_every: int = 5,
+        quality_tier: int = 1,
+        max_fallback_tier: int = 4,
+    ) -> None:
+        """Initialize the Rotator.
+
+        Parameters
+        ----------
+        store:
+            KeyStore instance.
+        provider_configs:
+            Provider configuration dict (from providers.json).
+        rotate_every:
+            Requests per key before forcing a rotation.
+        quality_tier:
+            Preferred model quality tier (1 = best). The rotator will try
+            this tier first and fall back through worse tiers when keys are exhausted.
+        max_fallback_tier:
+            Worst tier the rotator is allowed to fall back to (inclusive).
+            Must be >= quality_tier.
+
+        """
+        if quality_tier < MIN_QUALITY_TIER or quality_tier > MAX_QUALITY_TIER:
+            msg = f"quality_tier must be {MIN_QUALITY_TIER}-{MAX_QUALITY_TIER}, got {quality_tier}"
+            raise ValueError(msg)
+        if max_fallback_tier < MIN_QUALITY_TIER or max_fallback_tier > MAX_QUALITY_TIER:
+            msg = f"max_fallback_tier must be {MIN_QUALITY_TIER}-{MAX_QUALITY_TIER}, got {max_fallback_tier}"
+            raise ValueError(msg)
+        if quality_tier > max_fallback_tier:
+            msg = (
+                f"quality_tier ({quality_tier}) must be <= "
+                f"max_fallback_tier ({max_fallback_tier})"
+            )
+            raise ValueError(msg)
+
         self.store = store
         self.configs = provider_configs
         self.rotate_every = rotate_every
+        self._quality_tier = quality_tier
+        self._max_fallback_tier = max_fallback_tier
 
         self._order: dict[str, list[int]] = {}
         self._cursor: dict[str, int] = {}
@@ -79,7 +171,7 @@ class Rotator:
         # track which cap_key context each key_id was last selected under
         self._key_last_cap_key: dict[int, str] = {}
 
-    def _load_state(self, ck: str):
+    def _load_state(self, ck: str) -> None:
         if ck in self._loaded_cap_keys:
             return
         cursor, slot_counts = self.store.load_rotation_state(ck)
@@ -87,29 +179,45 @@ class Rotator:
         self._slot_count.update(slot_counts)
         self._loaded_cap_keys.add(ck)
 
-    def _persist_state(self, ck: str):
+    def _persist_state(self, ck: str) -> None:
         self.store.save_rotation_state(
             ck,
             self._cursor.get(ck, 0),
             self._slot_count,
         )
 
-    def _ensure_order(self, ck: str, capabilities: list[str], active_ids: set[int]):
+    def _ensure_order(self, ck: str, capabilities: list[str], active_ids: set[int]) -> None:
+        """Build or refresh the ordered key list for a capability context.
+
+        Keys are filtered to the configured quality tier range
+        [quality_tier, max_fallback_tier] and sorted by tier ascending
+        (best models first), then by score descending (least-used first within tier).
+        """
         self._load_state(ck)
         current = self._order.get(ck, [])
         if set(current) == active_ids:
             return
+
         all_keys = self.store.get_all_keys()
-        ordered = sorted(
-            [
-                k for k in all_keys
-                if k["is_active"] and any(
-                    c in self.store.parse_capabilities(k) for c in capabilities
-                )
-            ],
-            key=lambda k: _score_key(k, self.configs.get(k["provider"], {})),
-            reverse=True,
-        )
+        candidates: list[tuple[int, float, dict[str, Any]]] = []
+
+        for k in all_keys:
+            if not k["is_active"]:
+                continue
+            if not any(c in self.store.parse_capabilities(k) for c in capabilities):
+                continue
+            cfg = self.configs.get(k["provider"], {})
+            model = k["model"] or _resolve_model(cfg, ck)
+            tier = get_model_tier(model)
+            if not (self._quality_tier <= tier <= self._max_fallback_tier):
+                continue
+            score = _score_key(k, cfg)
+            candidates.append((tier, score, k))
+
+        # Sort by tier ascending (best first), then score descending (least used first)
+        candidates.sort(key=lambda x: (x[0], -x[1]))
+        ordered = [k for _, _, k in candidates]
+
         self._order[ck] = [k["id"] for k in ordered]
         if ck not in self._cursor:
             self._cursor[ck] = 0
@@ -122,7 +230,8 @@ class Rotator:
         self,
         capabilities: list[str] | str,
         subscriber_id: str = "unknown",
-    ) -> Optional[dict]:
+    ) -> dict[str, Any] | None:
+        """Select the best available key for the given capabilities."""
         if isinstance(capabilities, str):
             capabilities = [capabilities]
         ck = _cap_key(capabilities)
@@ -154,7 +263,9 @@ class Rotator:
         cfg   = self.configs.get(best["provider"], {})
         extra = json.loads(best["extra_params"] or "{}")
 
-        base_url = cfg.get("base_url", "")
+        # Use user-specified base_url_override if present, otherwise use provider config default
+        raw_base_url = best.get("base_url_override") or cfg.get("base_url", "")
+        base_url = raw_base_url
         if "{account_id}" in base_url:
             base_url = base_url.format(account_id=extra.get("account_id", ""))
 
@@ -178,7 +289,7 @@ class Rotator:
             "rotate_every":      self.rotate_every,
         }
 
-    def peek_current_key(self, capabilities: list[str] | str) -> Optional[dict]:
+    def peek_current_key(self, capabilities: list[str] | str) -> dict[str, Any] | None:
         """Return the key that would be selected next without mutating state."""
         if isinstance(capabilities, str):
             capabilities = [capabilities]
@@ -221,10 +332,11 @@ class Rotator:
         self,
         key_id: int,
         provider: str,
-        headers: dict | None = None,
+        headers: dict[str, Any] | None = None,
         subscriber_id: str = "unknown",
         model: str = "",
     ) -> str:
+        """Handle a 429 rate-limit response and set cooldown."""
         headers = headers or {}
         cooldown = extract_cooldown(provider, headers, was_429=True)
         if cooldown is None:
@@ -245,17 +357,18 @@ class Rotator:
         )
         return cooldown
 
-    def handle_success(
+    def handle_success(  # noqa: PLR0913
         self,
         key_id: int,
         tokens_used: int,
-        headers: dict | None = None,
+        headers: dict[str, Any] | None = None,
         provider: str = "",
         tokens_in: int = 0,
         latency_ms: int = 0,
         subscriber_id: str = "unknown",
         model: str = "",
-    ):
+    ) -> None:
+        """Handle a successful API response, record usage and audit log."""
         headers = headers or {}
         cooldown = extract_cooldown(provider, headers, was_429=False) if provider else None
         self.store.record_usage(key_id, tokens=tokens_used, was_429=False, cooldown_until=cooldown)
@@ -274,7 +387,8 @@ class Rotator:
             success=True,
         )
 
-    def get_earliest_retry(self, capabilities: list[str] | str) -> Optional[str]:
+    def get_earliest_retry(self, capabilities: list[str] | str) -> str | None:
+        """Return the earliest cooldown expiry among matching keys, or None."""
         if isinstance(capabilities, str):
             capabilities = [capabilities]
         all_keys = self.store.get_all_keys()
