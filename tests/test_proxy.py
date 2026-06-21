@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from llm_keypool.key_store import KeyStore
-from llm_keypool.proxy import _mask_key, make_app
+from llm_keypool.proxy import _KEYPOOL_MODEL_ID, _KEYPOOL_MODEL_OWNER, _mask_key, make_app
 
 
 # ---------------------------------------------------------------------------
@@ -98,8 +98,11 @@ class TestMakeApp:
         data = resp.json()
         assert data["object"] == "list"
         assert len(data["data"]) > 0
-        # At least a few well-known models should be present
         model_ids = {m["id"] for m in data["data"]}
+        assert _KEYPOOL_MODEL_ID in model_ids
+        keypool_model = next(m for m in data["data"] if m["id"] == _KEYPOOL_MODEL_ID)
+        assert keypool_model["owned_by"] == _KEYPOOL_MODEL_OWNER
+        # At least a few well-known models should be present
         assert "llama-3.3-70b-versatile" in model_ids
 
     def test_audit_endpoint(self, db_path: Path, monkeypatch: pytest.MonkeyPatch):

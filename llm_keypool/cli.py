@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,6 +13,7 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
+from llm_keypool.key_checker import auto_detect_provider, detect_provider_sync
 from llm_keypool.key_store import KeyStore
 
 app = typer.Typer(
@@ -271,6 +273,36 @@ def audit(
     console.print(f"[dim]{len(rows)} entries, last {days} days[/dim]")
 
 
+@app.command(name="check-key")
+def check_key(
+    key: str = typer.Argument(..., help="API key to test against providers"),
+    providers: str | None = typer.Option(
+        None,
+        "--providers",
+        help="Comma-separated provider list. Defaults to all testable providers.",
+    ),
+    timeout: float = typer.Option(8.0, "--timeout", help="Per-provider timeout in seconds"),
+    max_concurrent: int = typer.Option(6, "--max-concurrent", min=1, help="Max concurrent provider checks"),
+) -> None:
+    candidates = [p.strip() for p in providers.split(",") if p.strip()] if providers else None
+
+    table = Table(box=box.ROUNDED, show_header=True, header_style="bold cyan")
+    table.add_column("Provider", min_width=16)
+    table.add_column("Status", width=12, justify="center")
+    table.add_column("Detail", min_width=40)
+
+    results = asyncio.run(auto_detect_provider(key, candidates, timeout, max_concurrent))
+    for provider, success, detail in results:
+        status = "[green]match[/green]" if success else "[dim]no match[/dim]"
+        table.add_row(provider, status, detail)
+
+    console.print(table)
+    if any(success for _, success, _ in results):
+        console.print("[green]Provider detected.[/green]")
+    else:
+        console.print("[yellow]No provider accepted this key.[/yellow]")
+
+
 @app.command()
 def gui() -> None:
     """Launch the Textual TUI."""
@@ -373,6 +405,27 @@ def _detect_provider_from_key(api_key: str) -> str | None:
     return None
 
 
+def _normalize_import_capabilities(caps: Any) -> list[str]:
+    if caps is None or not isinstance(caps, (str, list)):
+        return ["general_purpose"]
+    if isinstance(caps, str):
+        return [c.strip() for c in caps.split(",") if c.strip()]
+    return [str(c) for c in caps]
+
+
+def _resolve_provider_by_checking(
+    key: str,
+    configs: dict[str, Any],
+    timeout: float,
+    max_concurrent: int,
+) -> tuple[str, bool, str, int]:
+    results = detect_provider_sync(key, timeout=timeout, max_concurrent=max_concurrent)
+    for provider, success, detail in results:
+        if success:
+            return provider, True, detail, len(results)
+    return "", False, "; ".join(f"{p}: {d}" for p, _, d in results[:3]), len(results)
+
+
 def _parse_import_entry(line: str, configs: dict[str, Any]) -> dict[str, Any] | None:
     """Parse a single line from an import file into an entry dict.
 
@@ -423,7 +476,13 @@ def _parse_import_entry(line: str, configs: dict[str, Any]) -> dict[str, Any] | 
     }
 
 
-def _resolve_import_entries(lines: list[str], configs: dict[str, Any]) -> tuple[list[dict[str, Any]], list[tuple[str, str]]]:
+def _resolve_import_entries(
+    lines: list[str],
+    configs: dict[str, Any],
+    check_providers: bool = False,  # noqa: FBT001
+    check_timeout: float = 8.0,
+    check_concurrency: int = 6,
+) -> tuple[list[dict[str, Any]], list[tuple[str, str]]]:
     """Parse all lines and resolve providers.
 
     Returns (entries, errors) where entries are valid parsed entries
@@ -447,8 +506,29 @@ def _resolve_import_entries(lines: list[str], configs: dict[str, Any]) -> tuple[
             provider = _detect_provider_from_key(key)
 
         if not provider:
-            errors.append((_mask_key_display(key), "Cannot detect provider from key prefix"))
-            continue
+            if check_providers:
+                detected, success, detail, checked = _resolve_provider_by_checking(
+                    key,
+                    configs,
+                    check_timeout,
+                    check_concurrency,
+                )
+                if success:
+                    provider = detected
+                    console.print(
+                        f"[green]Detected {_mask_key_display(key)} as {provider} after checking {checked} provider(s).[/green]",
+                    )
+                else:
+                    errors.append(
+                        (
+                            _mask_key_display(key),
+                            f"Cannot detect provider after checking {checked} provider(s): {detail}",
+                        ),
+                    )
+                    continue
+            else:
+                errors.append((_mask_key_display(key), "Cannot detect provider from key prefix"))
+                continue
 
         if provider not in configs:
             errors.append((_mask_key_display(key), f"Unknown provider '{provider}'"))
@@ -458,13 +538,7 @@ def _resolve_import_entries(lines: list[str], configs: dict[str, Any]) -> tuple[
             errors.append((_mask_key_display(key), f"Key too short (min {MIN_KEY_LENGTH} chars)"))
             continue
 
-        caps = parsed.get("capabilities")
-        if caps is None or not isinstance(caps, (str, list)):
-            caps = ["general_purpose"]
-        elif isinstance(caps, str):
-            caps = [c.strip() for c in caps.split(",") if c.strip()]
-        else:
-            caps = [str(c) for c in caps]
+        caps = _normalize_import_capabilities(parsed.get("capabilities"))
 
         entries.append({
             "key": key,
@@ -588,6 +662,22 @@ def import_keys(
         "--force",
         help="Continue importing even if some keys fail or can't be detected",
     ),
+    check_providers: bool = typer.Option(  # noqa: FBT001
+        False,  # noqa: FBT003
+        "--check-providers",
+        help="For unresolved keys, try providers and import only keys that get a successful response",
+    ),
+    check_timeout: float = typer.Option(
+        8.0,
+        "--check-timeout",
+        help="Per-provider timeout for --check-providers",
+    ),
+    check_concurrency: int = typer.Option(
+        6,
+        "--check-concurrency",
+        help="Max concurrent provider checks for --check-providers",
+        min=1,
+    ),
 ) -> None:
     r"""Import API keys from a file with automatic provider detection.
 
@@ -612,6 +702,9 @@ def import_keys(
       or_     → openrouter
       cohere_ → cohere
       cf-     → cloudflare
+
+    Use --check-providers to test unresolved keys against supported providers.
+    Only successful provider responses are imported.
     """
     configs = _load_provider_configs()
 
@@ -630,7 +723,13 @@ def import_keys(
         console.print("[yellow]File is empty.[/yellow]")
         return
 
-    entries, errors = _resolve_import_entries(lines, configs)
+    entries, errors = _resolve_import_entries(
+        lines,
+        configs,
+        check_providers=check_providers,
+        check_timeout=check_timeout,
+        check_concurrency=check_concurrency,
+    )
 
     if not entries and not errors:
         console.print("[yellow]No keys found in file.[/yellow]")

@@ -249,6 +249,27 @@ def test_import_dry_run_no_detectable_prefix(tmp_path):
     assert "Cannot detect provider" in result.output
 
 
+@patch("llm_keypool.cli.detect_provider_sync")
+def test_import_dry_run_checks_unknown_providers(mock_check, tmp_path):
+    mock_check.return_value = [("mistral", True, "OK")]
+    p = _import_file(["zzz_unknown_key"], tmp_path)
+    result = runner.invoke(app, ["import", str(p), "--dry-run", "--check-providers"])
+    assert result.exit_code == 0
+    assert "mistral" in result.output
+    assert "Detected" in result.output
+    mock_check.assert_called_once()
+
+
+@patch("llm_keypool.cli.detect_provider_sync")
+def test_import_dry_run_reports_checked_unknown_provider_failures(mock_check, tmp_path):
+    mock_check.return_value = [("groq", False, "auth error")]
+    p = _import_file(["zzz_unknown_key"], tmp_path)
+    result = runner.invoke(app, ["import", str(p), "--dry-run", "--check-providers"])
+    assert result.exit_code == 0
+    assert "Cannot detect provider after checking 1 provider" in result.output
+    mock_check.assert_called_once()
+
+
 def test_import_dry_run_ndjson_invalid_json(tmp_path):
     """Invalid JSON lines are reported without crashing."""
     p = _import_file(["{bad json}"], tmp_path)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,6 +25,7 @@ from textual.widgets import (
     TabPane,
 )
 
+from llm_keypool.key_checker import detect_provider_sync
 from llm_keypool.key_store import KeyStore
 
 _CONFIG_PATH = Path(__file__).parent / "config" / "providers.json"
@@ -85,6 +87,80 @@ def _detect_provider_from_key(api_key: str) -> str | None:
     return None
 
 
+def _normalize_import_capabilities(caps: Any) -> list[str]:
+    if caps is None or not isinstance(caps, (str, list)):
+        return ["general_purpose"]
+    if isinstance(caps, str):
+        return [c.strip() for c in caps.split(",") if c.strip()]
+    return [str(c) for c in caps]
+
+
+def _resolve_provider_by_checking(
+    key: str,
+    timeout: float,
+    max_concurrent: int,
+) -> tuple[str, bool, str, int]:
+    results = detect_provider_sync(key, timeout=timeout, max_concurrent=max_concurrent)
+    for provider, success, detail in results:
+        if success:
+            return provider, True, detail, len(results)
+    return "", False, "; ".join(f"{p}: {d}" for p, _, d in results[:3]), len(results)
+
+
+async def _resolve_provider_by_checking_async(
+    key: str,
+    timeout: float,
+    max_concurrent: int,
+) -> tuple[str, bool, str, int]:
+    results = await asyncio.to_thread(
+        detect_provider_sync,
+        key,
+        None,
+        timeout,
+        max_concurrent,
+    )
+    for provider, success, detail in results:
+        if success:
+            return provider, True, detail, len(results)
+    return "", False, "; ".join(f"{p}: {d}" for p, _, d in results[:3]), len(results)
+
+
+async def _detect_unknown_provider_overrides(
+    lines: list[str],
+    configs: dict[str, Any],
+    timeout: float,
+    max_concurrent: int,
+) -> tuple[dict[str, str], dict[str, str]]:
+    overrides: dict[str, str] = {}
+    errors: dict[str, str] = {}
+
+    for raw_line in lines:
+        parsed = _parse_import_entry(raw_line, configs)
+        if parsed is None or "_error" in parsed:
+            continue
+
+        key = str(parsed["key"])
+        provider: str | None = parsed.get("provider")
+        if not provider:
+            provider = _detect_provider_from_key(key)
+        if provider or not key or len(key) < MIN_KEY_LENGTH:
+            continue
+
+        detected, success, detail, checked = await _resolve_provider_by_checking_async(
+            key,
+            timeout,
+            max_concurrent,
+        )
+        if success:
+            overrides[key] = detected
+        else:
+            errors[key] = (
+                f"Cannot detect provider after checking {checked} provider(s): {detail}"
+            )
+
+    return overrides, errors
+
+
 def _parse_import_entry(line: str, configs: dict[str, Any]) -> dict[str, Any] | None:
     """Parse a single line from an import file into an entry dict.
 
@@ -135,7 +211,15 @@ def _parse_import_entry(line: str, configs: dict[str, Any]) -> dict[str, Any] | 
     }
 
 
-def _resolve_import_entries(lines: list[str], configs: dict[str, Any]) -> tuple[list[dict[str, Any]], list[tuple[str, str]]]:
+def _resolve_import_entries(
+    lines: list[str],
+    configs: dict[str, Any],
+    check_providers: bool = False,  # noqa: FBT001
+    check_timeout: float = 8.0,
+    check_concurrency: int = 6,
+    provider_overrides: dict[str, str] | None = None,
+    provider_check_errors: dict[str, str] | None = None,
+) -> tuple[list[dict[str, Any]], list[tuple[str, str]]]:
     """Parse all lines and resolve providers.
 
     Returns (entries, errors) where entries are valid parsed entries
@@ -159,8 +243,30 @@ def _resolve_import_entries(lines: list[str], configs: dict[str, Any]) -> tuple[
             provider = _detect_provider_from_key(key)
 
         if not provider:
-            errors.append((_mask_key_display(key), "Cannot detect provider from key prefix"))
-            continue
+            if provider_overrides and key in provider_overrides:
+                provider = provider_overrides[key]
+            elif provider_check_errors and key in provider_check_errors:
+                errors.append((_mask_key_display(key), provider_check_errors[key]))
+                continue
+            elif check_providers:
+                detected, success, detail, checked = _resolve_provider_by_checking(
+                    key,
+                    check_timeout,
+                    check_concurrency,
+                )
+                if success:
+                    provider = detected
+                else:
+                    errors.append(
+                        (
+                            _mask_key_display(key),
+                            f"Cannot detect provider after checking {checked} provider(s): {detail}",
+                        ),
+                    )
+                    continue
+            else:
+                errors.append((_mask_key_display(key), "Cannot detect provider from key prefix"))
+                continue
 
         if provider not in configs:
             errors.append((_mask_key_display(key), f"Unknown provider '{provider}'"))
@@ -170,13 +276,7 @@ def _resolve_import_entries(lines: list[str], configs: dict[str, Any]) -> tuple[
             errors.append((_mask_key_display(key), f"Key too short (min {MIN_KEY_LENGTH} chars)"))
             continue
 
-        caps = parsed.get("capabilities")
-        if caps is None or not isinstance(caps, (str, list)):
-            caps = ["general_purpose"]
-        elif isinstance(caps, str):
-            caps = [c.strip() for c in caps.split(",") if c.strip()]
-        else:
-            caps = [str(c) for c in caps]
+        caps = _normalize_import_capabilities(parsed.get("capabilities"))
 
         entries.append({
             "key": key,
@@ -496,6 +596,10 @@ class LLMKeyPoolApp(App[None]):
                     "Force import (continue on errors)",
                     id="chk-import-force",
                 )
+                yield Checkbox(
+                    "Check unknown providers",
+                    id="chk-import-check-providers",
+                )
                 yield Button("Import", variant="primary", id="btn-import-start")
                 yield Static("", id="import-status")
         yield Footer()
@@ -654,11 +758,15 @@ class LLMKeyPoolApp(App[None]):
             status.update(f"[red]✗ {result['message']}[/red]")
 
     def _import_from_file(self) -> None:
+        self.run_worker(self._import_from_file_async(), name="import-file", exit_on_error=False)
+
+    async def _import_from_file_async(self) -> None:
         """Import API keys from a file with automatic provider detection."""
         status = self.query_one("#import-status", Static)
         file_inp = self.query_one("#inp-import-file", Input)
         dry_run = self.query_one("#chk-import-dry-run", Checkbox).value
         force = self.query_one("#chk-import-force", Checkbox).value
+        check_providers = self.query_one("#chk-import-check-providers", Checkbox).value
 
         filename = file_inp.value.strip()
         if not filename:
@@ -676,7 +784,24 @@ class LLMKeyPoolApp(App[None]):
             status.update("[yellow]File is empty.[/yellow]")
             return
 
-        entries, parse_errors = _resolve_import_entries(lines, self._providers)
+        provider_overrides: dict[str, str] = {}
+        provider_check_errors: dict[str, str] = {}
+        if check_providers:
+            status.update("[bold]Checking unknown providers...[/bold]")
+            provider_overrides, provider_check_errors = await _detect_unknown_provider_overrides(
+                lines,
+                self._providers,
+                8.0,
+                6,
+            )
+
+        entries, parse_errors = _resolve_import_entries(
+            lines,
+            self._providers,
+            check_providers=check_providers,
+            provider_overrides=provider_overrides,
+            provider_check_errors=provider_check_errors,
+        )
 
         if not entries and not parse_errors:
             status.update("[yellow]No keys found in file.[/yellow]")

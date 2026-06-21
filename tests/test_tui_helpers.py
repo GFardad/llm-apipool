@@ -16,6 +16,7 @@ from llm_keypool.tui import (
     _build_summary_text,
     _build_warn_lines,
     _detect_provider_from_key,
+    _detect_unknown_provider_overrides,
     _load_providers,
     _mask_key_display,
     _now_iso,
@@ -360,6 +361,40 @@ class TestResolveImportEntries:
         ctx, reason = errors[0]
         assert "cannot detect provider" in reason.lower() or "Cannot detect" in reason
         assert "zzz_" in ctx  # masked display of key prefix
+
+    @patch("llm_keypool.tui.detect_provider_sync")
+    def test_undetectable_provider_can_be_checked(self, mock_check) -> None:
+        mock_check.return_value = [("mistral", True, "OK")]
+        lines = ["zzz_noprefixkey"]
+        entries, errors = _resolve_import_entries(lines, SAMPLE_CONFIGS, check_providers=True)
+        assert errors == []
+        assert len(entries) == 1
+        assert entries[0]["provider"] == "mistral"
+        mock_check.assert_called_once()
+
+    @patch("llm_keypool.tui.detect_provider_sync")
+    def test_checked_unknown_provider_failure_remains_error(self, mock_check) -> None:
+        mock_check.return_value = [("groq", False, "auth error")]
+        lines = ["zzz_noprefixkey"]
+        entries, errors = _resolve_import_entries(lines, SAMPLE_CONFIGS, check_providers=True)
+        assert entries == []
+        assert len(errors) == 1
+        assert "checking 1 provider" in errors[0][1]
+        mock_check.assert_called_once()
+
+    @patch("llm_keypool.tui.detect_provider_sync")
+    @pytest.mark.asyncio
+    async def test_detect_unknown_provider_overrides_uses_threaded_sync_check(self, mock_check) -> None:
+        mock_check.return_value = [("mistral", True, "OK")]
+        overrides, errors = await _detect_unknown_provider_overrides(
+            ["zzz_noprefixkey"],
+            SAMPLE_CONFIGS,
+            0.25,
+            2,
+        )
+        assert errors == {}
+        assert overrides == {"zzz_noprefixkey": "mistral"}
+        mock_check.assert_called_once_with("zzz_noprefixkey", None, 0.25, 2)
 
     def test_unknown_detected_provider_produces_error(self) -> None:
         """Provider detected from prefix but not in configs."""

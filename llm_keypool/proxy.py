@@ -21,6 +21,8 @@ from llm_keypool.rotator import Rotator
 
 _MASK_MIN_LEN = 8
 _MASK_SHOW = 4
+_KEYPOOL_MODEL_ID = "LLM-Keypool"
+_KEYPOOL_MODEL_OWNER = "llm-keypool"
 
 
 def _mask_key(api_key: str) -> str:
@@ -173,8 +175,10 @@ def make_app(  # noqa: C901, PLR0915
 
     @app.get("/v1/models")
     async def list_models() -> dict[str, Any]:
-        seen: set[str] = set()
-        data = []
+        seen = {_KEYPOOL_MODEL_ID}
+        data = [
+            {"id": _KEYPOOL_MODEL_ID, "object": "model", "owned_by": _KEYPOOL_MODEL_OWNER, "created": 0}
+        ]
         for provider_name, cfg in configs.items():
             models = cfg.get("models", [])
             if isinstance(models, dict):
