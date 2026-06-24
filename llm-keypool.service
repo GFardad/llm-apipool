@@ -1,0 +1,16 @@
+[Unit]
+Description=LLM Keypool - Free-tier LLM Gateway
+After=network.target
+
+[Service]
+Type=simple
+User=%USER%
+WorkingDirectory=/home/%USER%/llm-keypool
+Environment="PATH=/home/%USER%/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="LLM_KEYPOOL_DB=/home/%USER%/.llm-keypool/keys.db"
+ExecStart=/home/%USER%/.local/bin/llm-keypool proxy --port 8000 --host 0.0.0.0
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
