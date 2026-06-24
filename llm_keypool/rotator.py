@@ -1,6 +1,7 @@
 """Key rotation and rate-limit-aware key selection with model quality tiering."""
 
 import json
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -10,9 +11,27 @@ from typing import Any
 from .key_store import KeyStore
 from .providers.headers import extract_cooldown
 
+
+def _tier_fallback_allowed() -> bool:
+    """Check whether tier fallback is currently enabled (runtime toggle)."""
+    try:
+        from .core.tier_fallback import is_tier_fallback_enabled
+        return is_tier_fallback_enabled()
+    except Exception:
+        return True  # safe default
+
 MONTHS_IN_YEAR = 12
 MIN_QUALITY_TIER = 1
 MAX_QUALITY_TIER = 4
+
+
+def _get_model_features(model_name: str) -> dict[str, Any] | None:
+    """Get model features from metadata cache."""
+    try:
+        from ..core.model_metadata import get_model_features
+        return get_model_features(model_name)
+    except Exception:
+        return None
 
 
 def _next_utc_midnight() -> str:
@@ -47,6 +66,42 @@ _FALLBACK_STRATEGIES = {
     "rolling_120":             _rolling(120),
 }
 _DEFAULT_FALLBACK = _rolling(60)
+
+# ---------------------------------------------------------------------------
+# Group-based routing utilities
+# ---------------------------------------------------------------------------
+
+_GROUP_PATTERN = re.compile(r"^g(\d+)$")
+
+
+def extract_group(model_name: str) -> str:
+    """Extract group from model name.
+
+    If model matches gN pattern (e.g., 'g1', 'g2'), returns 'gN'.
+    Otherwise returns 'default'.
+    """
+    if _GROUP_PATTERN.match(model_name):
+        return model_name
+    return "default"
+
+
+def parse_context_filter(model_param: str) -> tuple[str, int] | None:
+    """Parse model parameter for context window filtering.
+
+    Syntax: {prefix}.{number}{k|M} (e.g., 'g1.128k', 'opus.1M', 'default.64k').
+    Returns (group, min_context_tokens) or None if no filter syntax.
+
+    If prefix matches gN, filter applies to that specific group.
+    Otherwise filter applies to 'default' group.
+    'k' multiplies by 1,000; 'M' multiplies by 1,000,000.
+    """
+    match = re.match(r"^([a-zA-Z0-9_-]+)\.(\d+)(k|M)$", model_param, re.IGNORECASE)
+    if not match:
+        return None
+    prefix, number, suffix = match.groups()
+    min_context = int(number) * (1000 if suffix.lower() == "k" else 1000000)
+    group = prefix if _GROUP_PATTERN.match(prefix) else "default"
+    return group, min_context
 
 # ---------------------------------------------------------------------------
 # Model quality tiers
@@ -99,6 +154,11 @@ def _fallback_from_config(cfg: dict[str, Any]) -> Callable[[], str]:
 def _score_key(key: dict[str, Any], cfg: dict[str, Any]) -> float:
     rpd = cfg.get("limits", {}).get("rpd")
     return float(rpd - key["requests_today"]) if rpd else float(-key["requests_today"])
+
+
+def _key_priority(key: dict[str, Any]) -> int:
+    """Get priority for a key, defaulting to 0 if not set."""
+    return key.get("priority") or 0
 
 
 def _resolve_model(cfg: dict[str, Any], cap_key: str) -> str:
@@ -164,12 +224,40 @@ class Rotator:
         self._quality_tier = quality_tier
         self._max_fallback_tier = max_fallback_tier
 
+        # ── Force-provider override ────────────────────────────────────────
+        # When set, get_best_key() returns a synthetic key_data pointing at
+        # this provider regardless of what's in the key database.
+        self._force_provider: str | None = None
+        self._force_model: str | None = None
+
         self._order: dict[str, list[int]] = {}
         self._cursor: dict[str, int] = {}
         self._slot_count: dict[int, int] = {}
         self._loaded_cap_keys: set[str] = set()
         # track which cap_key context each key_id was last selected under
         self._key_last_cap_key: dict[int, str] = {}
+
+    # ── Force-provider routing override ──────────────────────────────────
+
+    @property
+    def force_provider(self) -> str | None:
+        """If set, all routing goes to this provider regardless of DB keys."""
+        return self._force_provider
+
+    def set_force_provider(self, provider: str, model: str | None = None) -> None:
+        """Force all chat-completion routing to *provider* with optional *model*.
+
+        When enabled, ``get_best_key()`` returns a synthetic key_data with no
+        real API key — the provider must support ``no_auth`` (like opencode_zen).
+        Call ``clear_force_provider()`` to restore normal DB-backed routing.
+        """
+        self._force_provider = provider
+        self._force_model = model
+
+    def clear_force_provider(self) -> None:
+        """Restore normal DB-backed routing."""
+        self._force_provider = None
+        self._force_model = None
 
     def _load_state(self, ck: str) -> None:
         if ck in self._loaded_cap_keys:
@@ -186,13 +274,16 @@ class Rotator:
             self._slot_count,
         )
 
-    def _ensure_order(self, ck: str, capabilities: list[str], active_ids: set[int]) -> None:
-        """Build or refresh the ordered key list for a capability context.
-
-        Keys are filtered to the configured quality tier range
-        [quality_tier, max_fallback_tier] and sorted by tier ascending
-        (best models first), then by score descending (least-used first within tier).
-        """
+    def _ensure_order(
+        self,
+        ck: str,
+        capabilities: list[str],
+        active_ids: set[int],
+        min_context: int | None = None,
+        require_tools: bool | None = None,
+        require_vision: bool | None = None,
+    ) -> None:
+        """Build or refresh the ordered key list for a capability context."""
         self._load_state(ck)
         current = self._order.get(ck, [])
         if set(current) == active_ids:
@@ -208,14 +299,25 @@ class Rotator:
                 continue
             cfg = self.configs.get(k["provider"], {})
             model = k["model"] or _resolve_model(cfg, ck)
+            
+            # Filter by model features if specified
+            features = _get_model_features(model)
+            if min_context is not None and features:
+                if features.get("context", 0) < min_context:
+                    continue
+            if require_tools is True and features and not features.get("tools", False):
+                continue
+            if require_vision is True and features and not features.get("vision", False):
+                continue
+            
             tier = get_model_tier(model)
-            if not (self._quality_tier <= tier <= self._max_fallback_tier):
+            effective_max = self._max_fallback_tier if _tier_fallback_allowed() else self._quality_tier
+            if not (self._quality_tier <= tier <= effective_max):
                 continue
             score = _score_key(k, cfg)
             candidates.append((tier, score, k))
 
-        # Sort by tier ascending (best first), then score descending (least used first)
-        candidates.sort(key=lambda x: (x[0], -x[1]))
+        candidates.sort(key=lambda x: (-_key_priority(x[2]), x[0], -x[1]))
         ordered = [k for _, _, k in candidates]
 
         self._order[ck] = [k["id"] for k in ordered]
@@ -230,8 +332,34 @@ class Rotator:
         self,
         capabilities: list[str] | str,
         subscriber_id: str = "unknown",
+        min_context: int | None = None,
+        require_tools: bool | None = None,
+        require_vision: bool | None = None,
     ) -> dict[str, Any] | None:
         """Select the best available key for the given capabilities."""
+        # ── Force-provider override — bypass key DB entirely ────────────
+        if self._force_provider:
+            cfg = self.configs.get(self._force_provider, {})
+            forced_model = self._force_model or cfg.get("default_model", "deepseek-v4-flash-free")
+            caps = capabilities if isinstance(capabilities, list) else [capabilities]
+            return {
+                "key_id": -1,  # sentinel — DB-independent
+                "provider": self._force_provider,
+                "api_key": "",
+                "base_url": cfg.get("base_url", ""),
+                "model": forced_model,
+                "capabilities": caps,
+                "cap_key": "forced",
+                "subscriber_id": subscriber_id,
+                "openai_compatible": cfg.get("openai_compatible", True),
+                "no_auth": cfg.get("no_auth", False),
+                "extra_params": {},
+                "requests_today": 0,
+                "tokens_used_today": 0,
+                "cycle_position": 1,
+                "rotate_every": 1,
+            }
+
         if isinstance(capabilities, str):
             capabilities = [capabilities]
         ck = _cap_key(capabilities)
@@ -240,9 +368,9 @@ class Rotator:
             return None
 
         active_map = {k["id"]: k for k in active}
-        self._ensure_order(ck, capabilities, set(active_map.keys()))
+        self._ensure_order(ck, capabilities, set(active_map.keys()), min_context, require_tools, require_vision)
 
-        order  = self._order[ck]
+        order = self._order[ck]
         cursor = self._cursor.get(ck, 0) % len(order)
 
         reset_done = False
@@ -260,10 +388,9 @@ class Rotator:
 
         self._cursor[ck] = cursor
         best = active_map[order[cursor]]
-        cfg   = self.configs.get(best["provider"], {})
+        cfg = self.configs.get(best["provider"], {})
         extra = json.loads(best["extra_params"] or "{}")
 
-        # Use user-specified base_url_override if present, otherwise use provider config default
         raw_base_url = best.get("base_url_override") or cfg.get("base_url", "")
         base_url = raw_base_url
         if "{account_id}" in base_url:
@@ -273,23 +400,27 @@ class Rotator:
         self._key_last_cap_key[best["id"]] = ck
 
         return {
-            "key_id":            best["id"],
-            "provider":          best["provider"],
-            "api_key":           best["api_key"],
-            "base_url":          base_url,
-            "model":             best["model"] or _resolve_model(cfg, ck),
-            "capabilities":      self.store.parse_capabilities(best),
-            "cap_key":           ck,
-            "subscriber_id":     subscriber_id,
+            "key_id": best["id"],
+            "provider": best["provider"],
+            "api_key": best["api_key"],
+            "base_url": base_url,
+            "model": best["model"] or _resolve_model(cfg, ck),
+            "capabilities": self.store.parse_capabilities(best),
+            "cap_key": ck,
+            "subscriber_id": subscriber_id,
             "openai_compatible": cfg.get("openai_compatible", True),
-            "extra_params":      extra,
-            "requests_today":    best["requests_today"],
+            "no_auth": cfg.get("no_auth", False),
+            "extra_params": extra,
+            "requests_today": best["requests_today"],
             "tokens_used_today": best["tokens_used_today"],
-            "cycle_position":    slot_pos,
-            "rotate_every":      self.rotate_every,
+            "cycle_position": slot_pos,
+            "rotate_every": self.rotate_every,
         }
 
-    def peek_current_key(self, capabilities: list[str] | str) -> dict[str, Any] | None:
+    def peek_current_key(
+        self, capabilities: list[str] | str, min_context: int | None = None,
+        require_tools: bool | None = None, require_vision: bool | None = None,
+    ) -> dict[str, Any] | None:
         """Return the key that would be selected next without mutating state."""
         if isinstance(capabilities, str):
             capabilities = [capabilities]
@@ -299,10 +430,10 @@ class Rotator:
             return None
 
         active_map = {k["id"]: k for k in active}
-        self._ensure_order(ck, capabilities, set(active_map.keys()))
+        self._ensure_order(ck, capabilities, set(active_map.keys()), min_context, require_tools, require_vision)
 
-        order      = self._order[ck]
-        cursor     = self._cursor.get(ck, 0) % len(order)
+        order = self._order[ck]
+        cursor = self._cursor.get(ck, 0) % len(order)
         slot_count = dict(self._slot_count)
 
         for _ in range(len(order) + 1):
@@ -314,18 +445,18 @@ class Rotator:
             return None
 
         best = active_map[order[cursor]]
-        cfg  = self.configs.get(best["provider"], {})
+        cfg = self.configs.get(best["provider"], {})
         slot_pos = slot_count.get(best["id"], 0) + 1
         return {
-            "key_id":            best["id"],
-            "provider":          best["provider"],
-            "model":             best["model"] or _resolve_model(cfg, ck),
-            "capabilities":      self.store.parse_capabilities(best),
-            "requests_today":    best["requests_today"],
+            "key_id": best["id"],
+            "provider": best["provider"],
+            "model": best["model"] or _resolve_model(cfg, ck),
+            "capabilities": self.store.parse_capabilities(best),
+            "requests_today": best["requests_today"],
             "tokens_used_today": best["tokens_used_today"],
-            "cooldown_until":    best.get("cooldown_until"),
-            "cycle_position":    slot_pos,
-            "rotate_every":      self.rotate_every,
+            "cooldown_until": best.get("cooldown_until"),
+            "cycle_position": slot_pos,
+            "rotate_every": self.rotate_every,
         }
 
     def handle_429(
@@ -337,6 +468,8 @@ class Rotator:
         model: str = "",
     ) -> str:
         """Handle a 429 rate-limit response and set cooldown."""
+        if key_id == -1:  # synthetic forced key — no DB state to manage
+            return ""
         headers = headers or {}
         cooldown = extract_cooldown(provider, headers, was_429=True)
         if cooldown is None:
@@ -369,6 +502,8 @@ class Rotator:
         model: str = "",
     ) -> None:
         """Handle a successful API response, record usage and audit log."""
+        if key_id == -1:  # synthetic forced key — no DB state to manage
+            return
         headers = headers or {}
         cooldown = extract_cooldown(provider, headers, was_429=False) if provider else None
         self.store.record_usage(key_id, tokens=tokens_used, was_429=False, cooldown_until=cooldown)
