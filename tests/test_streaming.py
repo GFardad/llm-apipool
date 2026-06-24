@@ -265,9 +265,14 @@ class TestOpenaiCompatMakeStreamGen:
         delta_role: str | None = None,
         finish_reason: str | None = None,
         index: int = 0,
+        reasoning_content: str | None = None,
+        reasoning: str | None = None,
     ) -> MagicMock:
+        delta = MagicMock(content=delta_content, role=delta_role)
+        delta.reasoning_content = reasoning_content
+        delta.reasoning = reasoning
         return MagicMock(
-            delta=MagicMock(content=delta_content, role=delta_role),
+            delta=delta,
             finish_reason=finish_reason,
             index=index,
         )
@@ -319,6 +324,125 @@ class TestOpenaiCompatMakeStreamGen:
         for c in chunks:
             assert c["object"] == "chat.completion.chunk"
             assert c["model"] == "test-model"
+
+    @pytest.mark.asyncio
+    async def test_reasoning_content_not_folded_in_streaming(self, stream_gen_kwargs, mock_openai_client):
+        """reasoning_content is NOT folded into content during streaming (FreeLLMAPI compat)."""
+        async def _stream():
+            yield self._event_maker(
+                choices=[self._choice_maker(delta_role="assistant")],
+            )
+            yield self._event_maker(
+                choices=[self._choice_maker(
+                    reasoning_content="Let me think about this...",
+                )],
+            )
+            yield self._event_maker(
+                choices=[self._choice_maker(
+                    reasoning_content="The answer is 42.",
+                    finish_reason="stop",
+                )],
+                total_tokens=15,
+            )
+
+        raw = MagicMock()
+        raw.parse = MagicMock(return_value=_stream())
+        mock_openai_client.chat.completions.with_raw_response.create = AsyncMock(
+            return_value=raw,
+        )
+
+        with patch("llm_keypool.providers.openai_compat.AsyncOpenAI",
+                   return_value=mock_openai_client):
+            gen = oc._make_stream_gen(**stream_gen_kwargs)
+            chunks = [c async for c in gen]
+
+        assert len(chunks) == 3
+        assert "content" not in chunks[0]["choices"][0]["delta"]
+        assert chunks[0]["choices"][0]["delta"]["role"] == "assistant"
+        # reasoning_content is its own field, NOT folded into content
+        assert "content" not in chunks[1]["choices"][0]["delta"]
+        assert chunks[1]["choices"][0]["delta"]["reasoning_content"] == "Let me think about this..."
+        assert "content" not in chunks[2]["choices"][0]["delta"]
+        assert chunks[2]["choices"][0]["delta"]["reasoning_content"] == "The answer is 42."
+        assert chunks[2]["choices"][0]["finish_reason"] == "stop"
+        assert chunks[2]["x_tokens_used"] == 15
+
+    @pytest.mark.asyncio
+    async def test_real_content_not_overridden_by_reasoning(self, stream_gen_kwargs, mock_openai_client):
+        """Real content and reasoning_content are separate fields in streaming."""
+        async def _stream():
+            yield self._event_maker(
+                choices=[self._choice_maker(
+                    reasoning_content="Thinking step by step...",
+                )],
+            )
+            yield self._event_maker(
+                choices=[self._choice_maker(
+                    delta_content="The answer is ",
+                    reasoning_content="",
+                )],
+            )
+            yield self._event_maker(
+                choices=[self._choice_maker(
+                    delta_content="42.",
+                    reasoning_content="",
+                    finish_reason="stop",
+                )],
+            )
+
+        raw = MagicMock()
+        raw.parse = MagicMock(return_value=_stream())
+        mock_openai_client.chat.completions.with_raw_response.create = AsyncMock(
+            return_value=raw,
+        )
+
+        with patch("llm_keypool.providers.openai_compat.AsyncOpenAI",
+                   return_value=mock_openai_client):
+            gen = oc._make_stream_gen(**stream_gen_kwargs)
+            chunks = [c async for c in gen]
+
+        assert len(chunks) == 3
+        # reasoning-only chunk: content is NOT set (not folded)
+        assert "content" not in chunks[0]["choices"][0]["delta"]
+        assert chunks[0]["choices"][0]["delta"]["reasoning_content"] == "Thinking step by step..."
+        # subsequent chunks with real content work as normal
+        assert chunks[1]["choices"][0]["delta"]["content"] == "The answer is "
+        assert chunks[1]["choices"][0]["delta"]["reasoning_content"] == ""
+        assert chunks[2]["choices"][0]["delta"]["content"] == "42."
+        assert chunks[2]["choices"][0]["finish_reason"] == "stop"
+
+    @pytest.mark.asyncio
+    async def test_reasoning_fallback_ollama_not_folded(self, stream_gen_kwargs, mock_openai_client):
+        """Ollama 'reasoning' field is NOT folded into content during streaming."""
+        async def _stream():
+            yield self._event_maker(
+                choices=[self._choice_maker(
+                    reasoning="Ollama reasoning...",
+                )],
+            )
+            yield self._event_maker(
+                choices=[self._choice_maker(
+                    delta_content="Actual answer",
+                    finish_reason="stop",
+                )],
+            )
+
+        raw = MagicMock()
+        raw.parse = MagicMock(return_value=_stream())
+        mock_openai_client.chat.completions.with_raw_response.create = AsyncMock(
+            return_value=raw,
+        )
+
+        with patch("llm_keypool.providers.openai_compat.AsyncOpenAI",
+                   return_value=mock_openai_client):
+            gen = oc._make_stream_gen(**stream_gen_kwargs)
+            chunks = [c async for c in gen]
+
+        assert len(chunks) == 2
+        # Ollama reasoning is its own field, NOT folded into content during streaming
+        assert "content" not in chunks[0]["choices"][0]["delta"]
+        assert chunks[0]["choices"][0]["delta"]["reasoning"] == "Ollama reasoning..."
+        assert chunks[1]["choices"][0]["delta"]["content"] == "Actual answer"
 
     @pytest.mark.asyncio
     async def test_empty_choices(self, stream_gen_kwargs, mock_openai_client):
@@ -474,6 +598,7 @@ class TestOpenaiCompatCompleteStream:
                 api_key="gsk_test123",
                 base_url="https://api.groq.com/openai/v1",
                 strip_thinking=True,
+                no_auth=False,
             )
 
     @pytest.mark.asyncio
@@ -700,6 +825,7 @@ class TestDispatchStreamComplete:
             )
             mock_rotator.get_best_key.assert_called_once_with(
                 ["general"], subscriber_id="test-sub",
+                min_context=None, require_tools=None, require_vision=None,
             )
 
     @pytest.mark.asyncio

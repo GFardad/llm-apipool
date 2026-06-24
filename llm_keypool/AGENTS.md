@@ -1,68 +1,85 @@
 # llm_keypool Core Package
 
-**Generated:** 2026-06-21
-**Commit:** 8a0aaca
+**Generated:** 2026-06-22 03:30:08
+**Commit:** 69232d0
 
 ## OVERVIEW
-Core logic: key storage, rotation, dispatch, CLI, TUI, proxy, LangChain wrapper.
+Core package: Typer CLI, SQLite key store, tiered rotator, FastAPI proxy, Textual TUI, LangChain wrapper, provider dispatch.
 
 ## STRUCTURE
 ```
 llm_keypool/
 ├── __init__.py           # Exports AggregatorChat
-├── __main__.py           # Entry point → cli.app()
-├── cli.py                # 9 Typer commands (293 lines)
-├── key_store.py          # SQLite CRUD + audit + rotation (367 lines)
-├── rotator.py            # Tier-based key selection (286 lines)
-├── langchain_wrapper.py  # AggregatorChat (234 lines)
-├── proxy.py              # FastAPI OpenAI-compatible (154 lines)
-├── tui.py                # Textual TUI, 3 tabs (379 lines)
-├── providers/            # Provider implementations (see AGENTS.md)
+├── __main__.py           # `llm-keypool` script entry
+├── cli.py                # Typer commands and import parsing
+├── key_checker.py        # Provider config checker / auto-detect bridge
+├── key_store.py          # SQLite CRUD, audit log, usage counters
+├── rotator.py            # Quality tiers, cooldowns, slot rotation
+├── langchain_wrapper.py  # AggregatorChat BaseChatModel wrapper
+├── proxy.py              # FastAPI OpenAI-compatible proxy
+├── proxy_logger.py       # Untracked local proxy JSONL logger
+├── tui.py                # Textual app
+├── tui_logs.py           # Untracked local proxy log viewer
+├── providers/            # Provider dispatch and clients
 └── config/
-    └── providers.json    # 40+ provider definitions
+    ├── providers.json    # 41 provider definitions
+    └── model_quality.json # 4-tier model map
 ```
 
 ## WHERE TO LOOK
-| Task | File | Notes |
-|------|------|-------|
-| Add/remove key | `cli.py:add` / `key_store.py` | `--provider`, `--key`, `--model`, `--capabilities` |
-| Rotator logic | `rotator.py:select_key()` | Tier sort, cooldown, 429 handling |
-| DB schema | `key_store.py:_init_db()` | keys, requests, rotation_state tables |
-| Streaming | `proxy.py:_stream()` | SSE generator, real tokens for OpenAI-compat |
-| TUI actions | `tui.py:action_*` | refresh, deactivate, clear cooldown |
-| Provider dispatch | `dispatch.py:dispatch()` | Retry loop, header extraction |
-| LangChain | `langchain_wrapper.py:AggregatorChat` | `_generate()`, `_agenerate()` |
+| Task | Location | Notes |
+|------|----------|-------|
+| Entry point | `__main__.py:6` | `main()` calls `cli.app()` |
+| CLI add/import | `cli.py:add`, `cli.py:import_keys` | Typer commands; import parsing helpers below |
+| Import parsing | `cli.py:_parse_import_entry`, `_resolve_import_entries` | key-per-line, `provider:key`, `---` blocks, NDJSON |
+| TUI import parsing | `tui.py:_parse_import_entry`, `_resolve_import_entries` | Mirrors CLI, async unknown-provider checks |
+| DB init/schema | `key_store.py:_init_db`, `SCHEMA` | SQLite WAL; inline migrations for legacy DBs |
+| Key CRUD | `key_store.py:register_key`, `get_active_keys`, `get_all_keys` | Capabilities are JSON text in SQLite |
+| Usage/audit | `key_store.py:record_usage`, `log_audit`, `get_audit_log` | Every call includes `subscriber_id` |
+| Routing | `rotator.py:get_best_key`, `handle_429`, `handle_success` | Tier range, score, rotation state |
+| Provider dispatch | `providers/dispatch.py:complete` | Non-streaming retries; streaming single attempt |
+| Proxy endpoints | `proxy.py:make_app` | `/v1/chat/completions`, `/v1/models`, `/health`, `/audit`, `/logs/*` |
+| TUI app | `tui.py:LLMKeyPoolApp` | Keys, proxy logs, add key, audit, import tabs |
+| LangChain | `langchain_wrapper.py:AggregatorChat` | `_generate()` calls `_agenerate()` via `asyncio.run` |
 
 ## CONVENTIONS
-- **DB**: All SQL uses parameterized queries EXCEPT `update_key()` dynamic SET (see parent ANTI-PATTERNS)
-- **Async**: `dispatch()`, provider `complete()` are async; CLI wraps via `asyncio.run()`
-- **Capabilities**: Use `capabilities: list[str]`, NOT legacy `category: str`
-- **Errors**: `CompletionResult(ok, content, error, was_429, ...)` for all providers
-- **Token count**: `tiktoken cl100k_base` for prompt tokens; chars/4 fallback
+- **DB**: `LLM_KEYPOOL_DB` overrides `~/.llm-keypool/keys.db`; `LLM_AGGREGATOR_DB` is copied forward if present.
+- **SQL**: new SQL must be parameterized; avoid dynamic SET clauses or f-string SQL.
+- **Capabilities**: prefer `capabilities: list[str]`; legacy positional `category` compatibility remains in tests/migrations.
+- **Provider calls**: async; return `CompletionResult` unless `stream=True`, then async generator of OpenAI chunk dicts.
+- **429 handling**: provider returns `was_429=True`; `dispatch()` calls `rotator.handle_429()` and retries non-streaming calls.
+- **Token accounting**: prefer `tiktoken`; char/4 is only fallback.
+- **Secrets**: mask API keys before logs; never print raw key material.
 
 ## ANTI-PATTERNS (THIS MODULE)
-- ❌ `category` param in 6 signatures: `register_key()`, `complete()`, `make_app()`, `AggregatorChat`, `add()`, `proxy`
-- ❌ `key_store.py:270` f-string SQL in `update_key()`
-- ❌ `dispatch.py:45` `len(content)//4` token estimation
-- ❌ `key_store.py:117-126` silent migration `except OperationalError: pass`
-- ❌ `tui.py:278` bare `except Exception:` in `_load_audit()`
+- `category` is legacy; do not add new public APIs around it.
+- Broad `except Exception` exists in TUI/local logs; new code should catch specific exceptions.
+- `_init_db()` suppresses duplicate migration/index errors; new Alembic migrations should fail loudly.
+- Provider code truncates error messages; include provider/status where possible without leaking keys.
+- Streaming path intentionally does not retry on 429; document this when changing proxy behavior.
 
 ## KEY FUNCTIONS
 | Function | File | Purpose |
 |----------|------|---------|
-| `KeyStore.register_key()` | `key_store.py:155` | Insert key with caps, model, provider |
-| `KeyStore.get_active_keys()` | `key_store.py:200` | Filter by capability, respect cooldown |
-| `Rotator.select_key()` | `rotator.py:180` | Pick key by tier → score → rotation |
-| `Rotator.handle_429()` | `rotator.py:240` | Mark cooldown, persist state |
-| `dispatch()` | `dispatch.py:13` | Route to provider, retry, extract headers |
-| `_load_provider_configs()` | `cli.py:31`, `proxy.py:17` | Read `providers.json` |
+| `main()` | `__main__.py:6` | Console script entry |
+| `_load_provider_configs()` | `cli.py:39`, `proxy.py:36` | Load `config/providers.json` |
+| `KeyStore.register_key()` | `key_store.py:173` | Insert key with caps, model, base URL, extra params |
+| `KeyStore.get_active_keys()` | `key_store.py:213` | Filter active, non-cooled-down keys by capabilities |
+| `KeyStore.record_usage()` | `key_store.py:246` | Daily/monthly counters, cooldown, last_429 |
+| `Rotator.get_best_key()` | `rotator.py:229` | Tier/score/order selection with `rotate_every` |
+| `Rotator.handle_429()` | `rotator.py:331` | Cooldown from headers or provider fallback strategy |
+| `dispatch.complete()` | `providers/dispatch.py:52` | Select key, call provider, rotate, audit |
+| `make_app()` | `proxy.py:50` | Build FastAPI proxy app |
+| `AggregatorChat._agenerate()` | `langchain_wrapper.py:103` | Async LangChain call path |
 
 ## ENTRY POINTS
 - `llm-keypool` → `__main__.py:main()` → `cli.app()`
 - `python -m llm_keypool` → same
+- `llm_keypool.AggregatorChat` → LangChain wrapper around `providers.dispatch.complete()`
 
 ## GOTCHAS
-- Rotation state persisted in `rotation_state` table (keyed by `cap_key`)
-- `cap_key` = JSON-sorted capabilities joined by `,` (e.g., `general_purpose,fast`)
-- Provider `extra_params` stored as JSON string in DB
-- Think-token regex: `re.sub(r'\\{.*?\\}\\}', '', content, flags=re.DOTALL)`
+- `cap_key` = JSON-sorted capabilities joined by `,` (e.g., `general_purpose,fast`).
+- `extra_params` is stored as JSON string in DB and forwarded to providers.
+- `base_url_override` wins over provider config; `{account_id}` is filled from `extra_params`.
+- Proxy exposes `LLM-Keypool` as a selectable OpenAI-compatible model ID.
+- Local untracked modules (`proxy_logger.py`, `tui_logs.py`) exist; do not assume they are part of the committed package.

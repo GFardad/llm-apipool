@@ -74,7 +74,7 @@ class TestMakeApp:
         monkeypatch.setenv("LLM_KEYPOOL_DB", str(db_path))
         app = make_app()
         assert app.title == "llm-keypool proxy"
-        assert app.version == "2.0"
+        assert app.version == "2.1"
 
     def test_health_endpoint(self, db_path: Path, monkeypatch: pytest.MonkeyPatch):
         """GET /health returns status ok with key counts."""
@@ -135,7 +135,7 @@ class TestChatCompletions:
             "provider": "groq", "model": "llama-3.3-70b-versatile", "key_id": 1,
         }
 
-        with patch("llm_keypool.proxy.complete", new_callable=AsyncMock) as mock_complete:
+        with patch("llm_keypool.api.routes.chat.dispatch_complete", new_callable=AsyncMock) as mock_complete:
             mock_complete.return_value = (result, key_data)
             app = make_app()
             client = TestClient(app)
@@ -154,7 +154,7 @@ class TestChatCompletions:
     def test_chat_completion_all_keys_exhausted(
         self, db_path: Path, monkeypatch: pytest.MonkeyPatch,
     ):
-        """When all keys are exhausted, respond 429."""
+        """When all keys are exhausted, respond 503 with OpenAI error shape."""
         monkeypatch.setenv("LLM_KEYPOOL_DB", str(db_path))
         result = SimpleNamespace(
             text="", tokens_used=0, error="all_keys_exhausted",
@@ -162,28 +162,7 @@ class TestChatCompletions:
         )
         key_data = None
 
-        with patch("llm_keypool.proxy.complete", new_callable=AsyncMock) as mock_complete:
-            mock_complete.return_value = (result, key_data)
-            app = make_app()
-            client = TestClient(app)
-            resp = client.post("/v1/chat/completions", json={
-                "messages": [{"role": "user", "content": "Hello"}],
-            })
-
-        assert resp.status_code == 429
-
-    def test_chat_completion_generic_error(
-        self, db_path: Path, monkeypatch: pytest.MonkeyPatch,
-    ):
-        """Non-exhausted errors produce 503."""
-        monkeypatch.setenv("LLM_KEYPOOL_DB", str(db_path))
-        result = SimpleNamespace(
-            text="", tokens_used=0, error="provider_timeout",
-            remaining_requests=None, rate_limit_headers={}, was_429=False,
-        )
-        key_data = None
-
-        with patch("llm_keypool.proxy.complete", new_callable=AsyncMock) as mock_complete:
+        with patch("llm_keypool.api.routes.chat.dispatch_complete", new_callable=AsyncMock) as mock_complete:
             mock_complete.return_value = (result, key_data)
             app = make_app()
             client = TestClient(app)
@@ -192,6 +171,33 @@ class TestChatCompletions:
             })
 
         assert resp.status_code == 503
+        body = resp.json()
+        assert "error" in body
+        assert body["error"]["code"] == "503"
+
+    def test_chat_completion_generic_error(
+        self, db_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        """Non-exhausted errors produce 502 with OpenAI error shape."""
+        monkeypatch.setenv("LLM_KEYPOOL_DB", str(db_path))
+        result = SimpleNamespace(
+            text="", tokens_used=0, error="provider_timeout",
+            remaining_requests=None, rate_limit_headers={}, was_429=False,
+        )
+        key_data = None
+
+        with patch("llm_keypool.api.routes.chat.dispatch_complete", new_callable=AsyncMock) as mock_complete:
+            mock_complete.return_value = (result, key_data)
+            app = make_app()
+            client = TestClient(app)
+            resp = client.post("/v1/chat/completions", json={
+                "messages": [{"role": "user", "content": "Hello"}],
+            })
+
+        assert resp.status_code == 502
+        body = resp.json()
+        assert "error" in body
+        assert body["error"]["code"] == "502"
 
     def test_chat_completion_with_max_tokens_and_temp(
         self, db_path: Path, monkeypatch: pytest.MonkeyPatch,
@@ -206,7 +212,7 @@ class TestChatCompletions:
             "provider": "groq", "model": "llama-3.1-8b-instant", "key_id": 1,
         }
 
-        with patch("llm_keypool.proxy.complete", new_callable=AsyncMock) as mock_complete:
+        with patch("llm_keypool.api.routes.chat.dispatch_complete", new_callable=AsyncMock) as mock_complete:
             mock_complete.return_value = (result, key_data)
             app = make_app(capabilities=["fast"])
             client = TestClient(app)
@@ -232,7 +238,7 @@ class TestChatCompletions:
             "provider": "groq", "model": "llama-3.1-8b-instant", "key_id": 1,
         }
 
-        with patch("llm_keypool.proxy.complete", new_callable=AsyncMock) as mock_complete:
+        with patch("llm_keypool.api.routes.chat.dispatch_complete", new_callable=AsyncMock) as mock_complete:
             mock_complete.return_value = (result, key_data)
             app = make_app(capabilities=["general_purpose"])
             client = TestClient(app)
@@ -257,7 +263,7 @@ class TestChatCompletions:
             "provider": "groq", "model": "llama-3.3-70b-versatile", "key_id": 1,
         }
 
-        with patch("llm_keypool.proxy.complete", new_callable=AsyncMock) as mock_complete:
+        with patch("llm_keypool.api.routes.chat.dispatch_complete", new_callable=AsyncMock) as mock_complete:
             mock_complete.return_value = (result, key_data)
             app = make_app()
             client = TestClient(app)
@@ -312,7 +318,7 @@ class TestStreaming:
         }
 
         gen = self._mock_stream_gen()
-        with patch("llm_keypool.proxy.complete", new_callable=AsyncMock) as mock_complete:
+        with patch("llm_keypool.api.routes.chat.dispatch_complete", new_callable=AsyncMock) as mock_complete:
             mock_complete.return_value = (gen, key_data)
             app = make_app()
             client = TestClient(app)
@@ -340,7 +346,7 @@ class TestStreaming:
         }
 
         gen = self._mock_stream_gen()
-        with patch("llm_keypool.proxy.complete", new_callable=AsyncMock) as mock_complete:
+        with patch("llm_keypool.api.routes.chat.dispatch_complete", new_callable=AsyncMock) as mock_complete:
             mock_complete.return_value = (gen, key_data)
             app = make_app()
             client = TestClient(app)
@@ -359,7 +365,7 @@ class TestStreaming:
         """Streaming with key_data=None returns 503 (line 118)."""
         monkeypatch.setenv("LLM_KEYPOOL_DB", str(db_path))
 
-        with patch("llm_keypool.proxy.complete", new_callable=AsyncMock) as mock_complete:
+        with patch("llm_keypool.api.routes.chat.dispatch_complete", new_callable=AsyncMock) as mock_complete:
             mock_complete.return_value = (AsyncMock(), None)
             app = make_app()
             client = TestClient(app)
@@ -385,7 +391,7 @@ class TestStreaming:
         }
 
         gen = self._chunks_without_fields()
-        with patch("llm_keypool.proxy.complete", new_callable=AsyncMock) as mock_complete:
+        with patch("llm_keypool.api.routes.chat.dispatch_complete", new_callable=AsyncMock) as mock_complete:
             mock_complete.return_value = (gen, key_data)
             app = make_app()
             client = TestClient(app)
@@ -412,21 +418,28 @@ class TestStreaming:
 class TestModelsEndpoint:
     """GET /v1/models — edge cases for uncovered lines."""
 
+    CUSTOM_CONFIGS_DICT: dict[str, Any] = {
+        "test_provider": {
+            "models": {"tier1": ["model-a", "model-b"], "tier2": ["model-c"]},
+            "default_model": "model-a",
+        },
+    }
+
+    CUSTOM_CONFIGS_LIST: dict[str, Any] = {
+        "test_provider": {
+            "models": ["model-a"],
+            "default_model": "model-default",
+        },
+    }
+
     def test_models_with_dict_models(
         self, db_path: Path, monkeypatch: pytest.MonkeyPatch,
     ):
-        """Dict-based models are flattened (line 181)."""
+        """Dict-based models are flattened."""
         monkeypatch.setenv("LLM_KEYPOOL_DB", str(db_path))
-        with patch("llm_keypool.proxy._load_provider_configs") as mock_load:
-            mock_load.return_value = {
-                "test_provider": {
-                    "models": {"tier1": ["model-a", "model-b"], "tier2": ["model-c"]},
-                    "default_model": "model-a",
-                },
-            }
-            app = make_app()
-            client = TestClient(app)
-            resp = client.get("/v1/models")
+        app = make_app(_configs=self.CUSTOM_CONFIGS_DICT)
+        client = TestClient(app)
+        resp = client.get("/v1/models")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -438,18 +451,11 @@ class TestModelsEndpoint:
     def test_models_default_not_in_list(
         self, db_path: Path, monkeypatch: pytest.MonkeyPatch,
     ):
-        """Default model not in models list gets prepended (line 184)."""
+        """Default model not in models list gets prepended."""
         monkeypatch.setenv("LLM_KEYPOOL_DB", str(db_path))
-        with patch("llm_keypool.proxy._load_provider_configs") as mock_load:
-            mock_load.return_value = {
-                "test_provider": {
-                    "models": ["model-a"],
-                    "default_model": "model-default",
-                },
-            }
-            app = make_app()
-            client = TestClient(app)
-            resp = client.get("/v1/models")
+        app = make_app(_configs=self.CUSTOM_CONFIGS_LIST)
+        client = TestClient(app)
+        resp = client.get("/v1/models")
 
         assert resp.status_code == 200
         data = resp.json()

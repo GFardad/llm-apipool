@@ -1,3 +1,18 @@
+# Node
+node_modules/
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+
+# Coverage / reports
+.coverage
+htmlcov/
+*.heapsnapshot
+
+# Generated / tooling artifacts
+graphify-out/
+.matrixx/
+
 # Database - contains registered API keys, never commit
 db/
 *.db

@@ -51,7 +51,7 @@ dev = [
 ]
 
 [project.scripts]
-llm-keypool = "llm_keypool.__main__:main"
+llm-keypool = "llm_keypool.cli:app"
 
 [tool.setuptools.packages.find]
 include = ["llm_keypool*"]
