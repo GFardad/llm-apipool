@@ -1,8 +1,8 @@
 """Blueprint Scanner — compares codebase against blueprint requirements."""
+
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import sys
@@ -33,7 +33,8 @@ def list_py(dirpath: str) -> list[str]:
     if not d.exists():
         return []
     return sorted(
-        p.name for p in d.iterdir()
+        p.name
+        for p in d.iterdir()
         if p.suffix == ".py" and p.name not in ("__init__.py", "_base.py")
     )
 
@@ -60,7 +61,7 @@ def check(req: dict) -> dict:
 
         # File/directory/adapter checks
         elif "16 adapter" in c:
-            count = len(list_py("llm_keypool/providers/adapters"))
+            count = len(list_py("llm_apipool/providers/adapters"))
             ok = count >= 16
             details.append(f"  {'OK' if ok else 'MISS'} {check_desc} ({count} found)")
             if ok:
@@ -77,7 +78,9 @@ def check(req: dict) -> dict:
                 failed += 1
 
         # Endpoint checks
-        elif "endpoint" in c or check_desc.strip().startswith(("GET ", "POST ", "PUT ")):
+        elif "endpoint" in c or check_desc.strip().startswith(
+            ("GET ", "POST ", "PUT ")
+        ):
             endpoint = check_desc
             ok = any(contains(f, re.escape(endpoint)) for f in files if f)
             details.append(f"  {'OK' if ok else 'MISS'} {check_desc}")
@@ -91,12 +94,18 @@ def check(req: dict) -> dict:
             if "all tests pass" in c:
                 r = subprocess.run(
                     "python -m pytest --tb=short -q 2>&1 | tail -5",
-                    shell=True, capture_output=True, text=True, timeout=120, cwd=ROOT,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    cwd=ROOT,
                 )
                 out = r.stdout + r.stderr
                 m = re.search(r"(\d+) passed", out)
                 ok = m is not None and "failed" not in out
-                details.append(f"  {'OK' if ok else 'MISS'} {check_desc} (count={m.group(1) if m else '?'})")
+                details.append(
+                    f"  {'OK' if ok else 'MISS'} {check_desc} (count={m.group(1) if m else '?'})"
+                )
             else:
                 ok = True
                 details.append(f"  OK {check_desc} (manual check)")
@@ -107,7 +116,11 @@ def check(req: dict) -> dict:
 
         # Generic keyword search
         else:
-            words = [w.strip(".,;:!?") for w in check_desc.split() if len(w.strip(".,;:!?")) > 3]
+            words = [
+                w.strip(".,;:!?")
+                for w in check_desc.split()
+                if len(w.strip(".,;:!?")) > 3
+            ]
             ok = any(any(contains(f, re.escape(w)) for w in words) for f in files if f)
             details.append(f"  {'OK' if ok else 'MISS'} {check_desc}")
             if ok:
@@ -117,9 +130,14 @@ def check(req: dict) -> dict:
 
     status = "done" if failed == 0 else ("partial" if passed > 0 else "pending")
     return {
-        "id": req_id, "category": req["category"], "description": req["description"],
-        "status": status, "checks_passed": passed, "checks_failed": failed,
-        "details": details, "files": files,
+        "id": req_id,
+        "category": req["category"],
+        "description": req["description"],
+        "status": status,
+        "checks_passed": passed,
+        "checks_failed": failed,
+        "details": details,
+        "files": files,
     }
 
 
@@ -137,7 +155,9 @@ def main():
     summary = {}
     for r in results:
         summary[r["status"]] = summary.get(r["status"], 0) + 1
-        emoji = {"done": "OK", "partial": "WARN", "pending": "FAIL"}.get(r["status"], "??")
+        emoji = {"done": "OK", "partial": "WARN", "pending": "FAIL"}.get(
+            r["status"], "??"
+        )
         print(f"[{emoji}] [{r['id']}] {r['description']}")
         for d in r["details"]:
             print(d)
@@ -153,8 +173,10 @@ def main():
 
     TICKETS.mkdir(parents=True, exist_ok=True)
     report = {
-        "meta": blueprint["meta"], "summary": summary,
-        "total": len(results), "requirements": results,
+        "meta": blueprint["meta"],
+        "summary": summary,
+        "total": len(results),
+        "requirements": results,
     }
     with open(OUTPUT, "w") as f:
         json.dump(report, f, indent=2)
@@ -162,8 +184,10 @@ def main():
     incomplete = [r for r in results if r["status"] != "done"]
     for r in incomplete:
         ticket = {
-            "id": r["id"], "category": r["category"],
-            "description": r["description"], "status": r["status"],
+            "id": r["id"],
+            "category": r["category"],
+            "description": r["description"],
+            "status": r["status"],
             "files": r["files"],
         }
         with open(TICKETS / f"{r['id']}.json", "w") as f:

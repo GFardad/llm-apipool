@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from llm_keypool.core.catalog import get_model_info, list_models, list_providers
+from llm_apipool.core.catalog import get_model_info, list_models, list_providers
 
 
 def test_list_providers_returns_list():

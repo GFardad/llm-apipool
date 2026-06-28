@@ -1,6 +1,6 @@
 {
   "meta": {
-    "name": "FreeLLMAPI Translation to llm-keypool",
+    "name": "FreeLLMAPI Translation to llm-apipool",
     "version": "1.0.0",
     "updated": "2026-06-23"
   },

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from llm_keypool.core.health import check_all_keys, check_key_health
+from llm_apipool.core.health import check_all_keys, check_key_health
 
 
 @pytest.mark.asyncio

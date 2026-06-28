@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from llm_keypool.providers.registry import (
+from llm_apipool.providers.registry import (
     get_provider,
     has_provider,
     list_providers,
@@ -36,8 +36,8 @@ def test_get_provider_unknown():
 
 
 def test_register_via_decorator():
-    from llm_keypool.providers.base import BaseProvider
-    from llm_keypool.providers.dispatch import CompletionResult
+    from llm_apipool.providers.base import BaseProvider
+    from llm_apipool.providers.dispatch import CompletionResult
 
     @register
     class MockProvider(BaseProvider):

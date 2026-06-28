@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
 
-from llm_keypool.db.queries import (
+from llm_apipool.db.queries import (
     get_active_key_count,
     get_key_health_summary,
     get_provider_breakdown,
     get_recent_usage,
     get_strategy_settings,
 )
-from llm_keypool.db.schema import (
+from llm_apipool.db.schema import (
     ApiKeyRow,
     AuditLogRow,
     DDL_STATEMENTS,

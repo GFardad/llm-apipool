@@ -4,6 +4,7 @@ Revision ID: 0008
 Revises: 0007
 Create Date: 2026-06-22
 """
+
 from __future__ import annotations
 from typing import Sequence, Union
 
@@ -45,7 +46,9 @@ def upgrade() -> None:
     op.create_table(
         "fallback_config",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("model_db_id", sa.Integer(), sa.ForeignKey("models.id"), nullable=False),
+        sa.Column(
+            "model_db_id", sa.Integer(), sa.ForeignKey("models.id"), nullable=False
+        ),
         sa.Column("priority", sa.Integer(), nullable=False),
         sa.Column("enabled", sa.Integer(), nullable=False, server_default="1"),
         sa.UniqueConstraint("model_db_id", name="uq_model_fallback"),
@@ -64,7 +67,12 @@ def upgrade() -> None:
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("auto_sort", sa.Text(), nullable=True),
         sa.Column("layout_config", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.Text(), nullable=False, server_default=sa.text("datetime('now')")),
+        sa.Column(
+            "created_at",
+            sa.Text(),
+            nullable=False,
+            server_default=sa.text("datetime('now')"),
+        ),
     )
 
     # ── Profile models ───────────────────────────────────────────────────────
@@ -72,8 +80,12 @@ def upgrade() -> None:
     op.create_table(
         "profile_models",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("profile_id", sa.Integer(), sa.ForeignKey("profiles.id"), nullable=False),
-        sa.Column("model_db_id", sa.Integer(), sa.ForeignKey("models.id"), nullable=False),
+        sa.Column(
+            "profile_id", sa.Integer(), sa.ForeignKey("profiles.id"), nullable=False
+        ),
+        sa.Column(
+            "model_db_id", sa.Integer(), sa.ForeignKey("models.id"), nullable=False
+        ),
         sa.Column("priority", sa.Integer(), nullable=False),
         sa.Column("enabled", sa.Integer(), nullable=False, server_default="1"),
         sa.UniqueConstraint("profile_id", "model_db_id", name="uq_profile_model"),
@@ -94,7 +106,12 @@ def upgrade() -> None:
         sa.Column("ttfb_ms", sa.Integer(), nullable=True),
         sa.Column("requested_model", sa.Text(), nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.Text(), nullable=False, server_default=sa.text("datetime('now')")),
+        sa.Column(
+            "created_at",
+            sa.Text(),
+            nullable=False,
+            server_default=sa.text("datetime('now')"),
+        ),
         sa.Column("request_type", sa.Text(), nullable=False, server_default="chat"),
     )
 
@@ -108,7 +125,12 @@ def upgrade() -> None:
         sa.Column("kind", sa.Text(), nullable=False),
         sa.Column("tokens", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("created_at_ms", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.Text(), nullable=False, server_default=sa.text("datetime('now')")),
+        sa.Column(
+            "created_at",
+            sa.Text(),
+            nullable=False,
+            server_default=sa.text("datetime('now')"),
+        ),
     )
 
     # ── Rate limit cooldowns ───────────────────────────────────────────────────
@@ -118,7 +140,12 @@ def upgrade() -> None:
         sa.Column("model_id", sa.Text(), nullable=False),
         sa.Column("key_id", sa.Integer(), nullable=False),
         sa.Column("expires_at_ms", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.Text(), nullable=False, server_default=sa.text("datetime('now')")),
+        sa.Column(
+            "created_at",
+            sa.Text(),
+            nullable=False,
+            server_default=sa.text("datetime('now')"),
+        ),
         sa.PrimaryKeyConstraint("platform", "model_id", "key_id"),
     )
 
@@ -132,12 +159,24 @@ def upgrade() -> None:
         sa.Column("limit_value", sa.Integer(), nullable=True),
         sa.Column("remaining_value", sa.Integer(), nullable=True),
         sa.Column("reset_at", sa.Text(), nullable=True),
-        sa.Column("reset_strategy", sa.Text(), nullable=False, server_default="unknown"),
+        sa.Column(
+            "reset_strategy", sa.Text(), nullable=False, server_default="unknown"
+        ),
         sa.Column("source", sa.Text(), nullable=False, server_default="probe"),
         sa.Column("confidence", sa.Float(), nullable=False, server_default="0"),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("observed_at", sa.Text(), nullable=False, server_default=sa.text("datetime('now')")),
-        sa.Column("updated_at", sa.Text(), nullable=False, server_default=sa.text("datetime('now')")),
+        sa.Column(
+            "observed_at",
+            sa.Text(),
+            nullable=False,
+            server_default=sa.text("datetime('now')"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.Text(),
+            nullable=False,
+            server_default=sa.text("datetime('now')"),
+        ),
         sa.PrimaryKeyConstraint("platform", "key_id", "quota_pool_key", "metric"),
     )
 
@@ -156,14 +195,26 @@ def upgrade() -> None:
         sa.Column("remaining_value", sa.Integer(), nullable=True),
         sa.Column("reset_at", sa.Text(), nullable=True),
         sa.Column("retry_after_ms", sa.Integer(), nullable=True),
-        sa.Column("reset_strategy", sa.Text(), nullable=False, server_default="unknown"),
+        sa.Column(
+            "reset_strategy", sa.Text(), nullable=False, server_default="unknown"
+        ),
         sa.Column("source", sa.Text(), nullable=False, server_default="probe"),
         sa.Column("confidence", sa.Float(), nullable=False, server_default="0"),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("raw_json", sa.Text(), nullable=True),
         sa.Column("endpoint", sa.Text(), nullable=True),
-        sa.Column("observed_at", sa.Text(), nullable=False, server_default=sa.text("datetime('now')")),
-        sa.Column("created_at", sa.Text(), nullable=False, server_default=sa.text("datetime('now')")),
+        sa.Column(
+            "observed_at",
+            sa.Text(),
+            nullable=False,
+            server_default=sa.text("datetime('now')"),
+        ),
+        sa.Column(
+            "created_at",
+            sa.Text(),
+            nullable=False,
+            server_default=sa.text("datetime('now')"),
+        ),
     )
 
     # ── Embedding models ───────────────────────────────────────────────────────
@@ -196,20 +247,24 @@ def upgrade() -> None:
     op.create_index("idx_requests_platform", "requests", ["platform"])
     op.create_index("idx_requests_key_id", "requests", ["key_id"])
     op.create_index(
-        "idx_rate_limit_usage_lookup", 
-        "rate_limit_usage", 
-        ["platform", "model_id", "key_id", "kind", "created_at_ms"]
+        "idx_rate_limit_usage_lookup",
+        "rate_limit_usage",
+        ["platform", "model_id", "key_id", "kind", "created_at_ms"],
     )
-    op.create_index("idx_rate_limit_cooldowns_expires", "rate_limit_cooldowns", ["expires_at_ms"])
     op.create_index(
-        "idx_provider_quota_state_platform", 
-        "provider_quota_state", 
-        ["platform", "key_id", "updated_at"]
+        "idx_rate_limit_cooldowns_expires", "rate_limit_cooldowns", ["expires_at_ms"]
+    )
+    op.create_index(
+        "idx_provider_quota_state_platform",
+        "provider_quota_state",
+        ["platform", "key_id", "updated_at"],
     )
 
 
 def downgrade() -> None:
-    op.drop_index("idx_provider_quota_state_platform", table_name="provider_quota_state")
+    op.drop_index(
+        "idx_provider_quota_state_platform", table_name="provider_quota_state"
+    )
     op.drop_index("idx_rate_limit_cooldowns_expires", table_name="rate_limit_cooldowns")
     op.drop_index("idx_rate_limit_usage_lookup", table_name="rate_limit_usage")
     op.drop_index("idx_requests_key_id", table_name="requests")
@@ -218,7 +273,7 @@ def downgrade() -> None:
     op.drop_index("idx_fallback_config_priority", table_name="fallback_config")
     op.drop_index("idx_models_enabled", table_name="models")
     op.drop_index("idx_models_platform", table_name="models")
-    
+
     op.drop_table("settings")
     op.drop_table("embedding_models")
     op.drop_table("provider_quota_observations")

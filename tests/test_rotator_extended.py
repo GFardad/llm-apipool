@@ -1,12 +1,13 @@
 """Extended tests for rotator.py - quality tier, peek_current_key, edge cases."""
+
 from __future__ import annotations
 
 import json
 
 import pytest
 
-from llm_keypool.key_store import KeyStore
-from llm_keypool.rotator import (
+from llm_apipool.key_store import KeyStore
+from llm_apipool.rotator import (
     Rotator,
     _load_model_tiers,
     _resolve_model,
@@ -31,6 +32,7 @@ PROVIDER_CONFIGS = {
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def db_path(tmp_path):
     return tmp_path / "rotator_ext_test.db"
@@ -50,7 +52,10 @@ def rotator(store):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _add_key(store, provider, api_key, category="general_purpose", model=None, **kwargs):
+
+def _add_key(
+    store, provider, api_key, category="general_purpose", model=None, **kwargs
+):
     store.register_key(provider, api_key, category, model, **kwargs)
     return store.get_active_keys(category)[-1]
 
@@ -59,11 +64,12 @@ def _add_key(store, provider, api_key, category="general_purpose", model=None, *
 # _load_model_tiers
 # ===================================================================
 
+
 def test_load_model_tiers_file_not_exists(monkeypatch, tmp_path):
     """Returns {} when model_quality.json is absent."""
     fake = tmp_path / "model_quality.json"
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_PATH", fake)
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_MAP", None)
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_PATH", fake)
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_MAP", None)
     assert _load_model_tiers() == {}
 
 
@@ -71,8 +77,8 @@ def test_load_model_tiers_empty_file(monkeypatch, tmp_path):
     """Returns {} when the file is empty (triggers JSONDecodeError)."""
     fake = tmp_path / "model_quality.json"
     fake.write_text("")
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_PATH", fake)
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_MAP", None)
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_PATH", fake)
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_MAP", None)
     assert _load_model_tiers() == {}
 
 
@@ -80,8 +86,8 @@ def test_load_model_tiers_invalid_json(monkeypatch, tmp_path):
     """Returns {} when the file contains invalid JSON."""
     fake = tmp_path / "model_quality.json"
     fake.write_text("{invalid")
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_PATH", fake)
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_MAP", None)
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_PATH", fake)
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_MAP", None)
     assert _load_model_tiers() == {}
 
 
@@ -90,8 +96,8 @@ def test_load_model_tiers_valid_file(monkeypatch, tmp_path):
     data = {"tier1": ["gpt-4o"], "tier2": ["gpt-4o-mini"], "tier3": [], "tier4": []}
     fake = tmp_path / "model_quality.json"
     fake.write_text(json.dumps(data))
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_PATH", fake)
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_MAP", None)
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_PATH", fake)
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_MAP", None)
     result = _load_model_tiers()
     assert result == {"gpt-4o": 1, "gpt-4o-mini": 2}
 
@@ -101,34 +107,35 @@ def test_load_model_tiers_caching(monkeypatch, tmp_path):
     fake = tmp_path / "model_quality.json"
     data = {"tier1": ["gpt-4o"], "tier2": [], "tier3": [], "tier4": []}
     fake.write_text(json.dumps(data))
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_PATH", fake)
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_MAP", None)
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_PATH", fake)
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_MAP", None)
 
     # First call populates cache
     first = _load_model_tiers()
     assert first == {"gpt-4o": 1}
 
-    # Modify the file behind the scenes
+    # Modify the file behind the scenes — mtime-based cache sees the change
     fake.write_text(json.dumps({"tier1": [], "tier2": [], "tier3": [], "tier4": []}))
 
-    # Second call returns cached result (not the modified file)
+    # Second call re-reads because mtime changed
     second = _load_model_tiers()
-    assert second == {"gpt-4o": 1}
+    assert second == {}
 
 
 # ===================================================================
 # get_model_tier
 # ===================================================================
 
+
 def test_get_model_tier_known(monkeypatch):
     """Returns correct tier for a known model."""
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_MAP", {"gpt-4o": 1})
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_MAP", {"gpt-4o": 1})
     assert get_model_tier("gpt-4o") == 1
 
 
 def test_get_model_tier_unknown(monkeypatch):
     """Returns tier 4 (fallback) for an unknown model."""
-    monkeypatch.setattr("llm_keypool.rotator._MODEL_TIER_MAP", {"gpt-4o": 1})
+    monkeypatch.setattr("llm_apipool.rotator._MODEL_TIER_MAP", {"gpt-4o": 1})
     assert get_model_tier("unknown-model") == 4
 
 
@@ -136,48 +143,32 @@ def test_get_model_tier_unknown(monkeypatch):
 # _resolve_model
 # ===================================================================
 
-def test_resolve_model_list():
-    """Returns first item when models is a list."""
+
+def test_resolve_model_returns_default():
+    """Returns default_model when present."""
+    cfg = {"default_model": "llama-3.3-70b"}
+    assert _resolve_model(cfg, "general_purpose") == "llama-3.3-70b"
+
+
+def test_resolve_model_no_default():
+    """Returns '' when no default_model."""
+    cfg = {}
+    assert _resolve_model(cfg, "general_purpose") == ""
+
+
+def test_resolve_model_ignores_models_key():
+    """Ignores legacy models key; only uses default_model."""
     cfg = {"models": ["model-a", "model-b"], "default_model": "default"}
-    assert _resolve_model(cfg, "general_purpose") == "model-a"
-
-
-def test_resolve_model_empty_list():
-    """Returns '' when models is an empty list."""
-    cfg = {"models": [], "default_model": "default"}
-    assert _resolve_model(cfg, "general_purpose") == ""
-
-
-def test_resolve_model_dict_with_cap():
-    """Returns first model for matching capability key in dict."""
-    cfg = {
-        "models": {"general_purpose": ["gp-model"], "code": ["code-model"]},
-        "default_model": "default",
-    }
-    assert _resolve_model(cfg, "code") == "code-model"
-
-
-def test_resolve_model_dict_without_cap():
-    """Returns '' when dict has no entry for the capability key."""
-    cfg = {"models": {"general_purpose": ["gp-model"]}, "default_model": "default"}
-    assert _resolve_model(cfg, "unknown_cap") == ""
-
-
-def test_resolve_model_other_type():
-    """Returns default_model when models is neither list nor dict (e.g. str)."""
-    cfg = {"models": "just-a-string", "default_model": "fallback-model"}
-    assert _resolve_model(cfg, "general_purpose") == "fallback-model"
-
-
-def test_resolve_model_other_type_no_default():
-    """Returns '' when models is neither list/dict and no default_model."""
-    cfg = {"models": "just-a-string"}
-    assert _resolve_model(cfg, "general_purpose") == ""
+    assert _resolve_model(cfg, "general_purpose") == "default"
+    # Even if models key is a dict with capability groups, ignore it
+    cfg2 = {"models": {"general_purpose": ["gp-model"]}, "default_model": "my-model"}
+    assert _resolve_model(cfg2, "general_purpose") == "my-model"
 
 
 # ===================================================================
 # _score_key
 # ===================================================================
+
 
 def test_score_key_with_rpd():
     """Score = rpd - requests_today when rpd is present."""
@@ -196,6 +187,7 @@ def test_score_key_without_rpd():
 # ===================================================================
 # Rotator.__init__ validation
 # ===================================================================
+
 
 def test_init_quality_tier_too_low(store):
     with pytest.raises(ValueError, match="quality_tier"):
@@ -225,6 +217,7 @@ def test_init_quality_below_max_fallback(store):
 # ===================================================================
 # peek_current_key
 # ===================================================================
+
 
 def test_peek_current_key_no_keys(rotator):
     """Returns None when there are no active keys."""
@@ -310,10 +303,11 @@ def test_peek_current_key_after_partial_usage(store):
 # get_best_key — quality tier filtering & edge cases
 # ===================================================================
 
+
 def test_get_best_key_filters_by_quality_tier(monkeypatch, store):
     """Only keys within [quality_tier, max_fallback_tier] are considered."""
     monkeypatch.setattr(
-        "llm_keypool.rotator._MODEL_TIER_MAP",
+        "llm_apipool.rotator._MODEL_TIER_MAP",
         {"gpt-4o": 1, "llama-3.1-8b-instant": 3},
     )
     cfg = {
@@ -337,7 +331,7 @@ def test_get_best_key_filters_by_quality_tier(monkeypatch, store):
 def test_get_best_key_falls_back_to_lower_tier(monkeypatch, store):
     """Falls back to lower tier when preferred tier keys are exhausted."""
     monkeypatch.setattr(
-        "llm_keypool.rotator._MODEL_TIER_MAP",
+        "llm_apipool.rotator._MODEL_TIER_MAP",
         {"gpt-4o": 1, "llama-3.1-8b-instant": 3},
     )
     cfg = {
@@ -418,6 +412,7 @@ def test_get_best_key_missing_account_id(store):
 # _ensure_order edge cases
 # ===================================================================
 
+
 def test_ensure_order_skips_non_matching_capability(store, rotator):
     """Keys with capabilities that don't match are skipped (line 208)."""
     # Register a key with different capabilities
@@ -457,4 +452,65 @@ def test_get_best_key_str_capability(store, rotator):
     assert key["model"] == "gpt-4o"
 
 
+# ── quality_tier / max_fallback_tier invariant ────────────────────────────────
 
+
+def test_set_quality_tier_enforces_invariant(store):
+    """Setting quality_tier above max_fallback_tier should raise ValueError."""
+    r = Rotator(store, PROVIDER_CONFIGS, quality_tier=2, max_fallback_tier=4)
+
+    # Normal case: fine
+    r.set_quality_tier(3)
+    assert r.get_quality_tier() == 3
+
+    # Lower max so we can test violation
+    r.set_max_fallback_tier(3)
+
+    # Raising quality_tier above max_fallback_tier should fail (both valid range)
+    with pytest.raises(ValueError, match="must not exceed"):
+        r.set_quality_tier(4)
+
+    # quality_tier unchanged
+    assert r.get_quality_tier() == 3
+
+
+def test_set_max_fallback_tier_enforces_invariant(store):
+    """Setting max_fallback_tier below quality_tier should raise ValueError."""
+    r = Rotator(store, PROVIDER_CONFIGS, quality_tier=2, max_fallback_tier=4)
+
+    # Normal case: fine
+    r.set_max_fallback_tier(3)
+    assert r.get_max_fallback_tier() == 3
+
+    # Lowering max_fallback_tier below quality_tier should fail
+    with pytest.raises(ValueError, match="must not be less"):
+        r.set_max_fallback_tier(1)
+
+    # max_fallback_tier unchanged
+    assert r.get_max_fallback_tier() == 3
+
+
+def test_config_change_invalidates_order_cache(tmp_path, store):
+    """Changing quality_tier or max_fallback_tier must rebuild the order cache."""
+    r = Rotator(store, PROVIDER_CONFIGS, quality_tier=1, max_fallback_tier=4)
+    store.register_key(
+        "groq",
+        "test-key-1",
+        capabilities="general_purpose",
+        model="llama-3.3-70b-versatile",
+    )  # tier 2
+
+    # Normal: key at tier 2 is available (quality_tier=1 <= tier 2 <= max_fallback_tier=4)
+    key = r.get_best_key("general_purpose")
+    assert key is not None
+
+    # Change quality_tier to 2 — tier 2 still within range (2 <= 2 <= 4)
+    r.set_quality_tier(2)
+    key = r.get_best_key("general_purpose")
+    assert key is not None
+
+    # Now set max_fallback_tier to 1 — only tier 1 keys
+    r.set_quality_tier(1)
+    r.set_max_fallback_tier(1)
+    key = r.get_best_key("general_purpose")
+    assert key is None, "Key in tier 2 should be filtered when max_fallback_tier=1"

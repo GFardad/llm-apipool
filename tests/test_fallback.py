@@ -1,19 +1,37 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
-from llm_keypool.core.fallback import AllModelsExhaustedError, FallbackManager
+from llm_apipool.core.fallback import AllModelsExhaustedError, FallbackManager
 
 
 @pytest.fixture
 def mock_store():
     store = MagicMock()
     store.get_active_keys.return_value = [
-        {"id": 1, "provider": "groq", "model": "llama-3.3-70b-versatile", "api_key": "gsk_test", "is_active": 1},
-        {"id": 2, "provider": "groq", "model": "llama-3.3-70b-versatile", "api_key": "gsk_test2", "is_active": 1},
-        {"id": 3, "provider": "cerebras", "model": "llama3.3-70b", "api_key": "csk_test", "is_active": 1},
+        {
+            "id": 1,
+            "provider": "groq",
+            "model": "llama-3.3-70b-versatile",
+            "api_key": "gsk_test",
+            "is_active": 1,
+        },
+        {
+            "id": 2,
+            "provider": "groq",
+            "model": "llama-3.3-70b-versatile",
+            "api_key": "gsk_test2",
+            "is_active": 1,
+        },
+        {
+            "id": 3,
+            "provider": "cerebras",
+            "model": "llama3.3-70b",
+            "api_key": "csk_test",
+            "is_active": 1,
+        },
     ]
     return store
 
@@ -57,6 +75,7 @@ def test_fallback_no_candidates():
     fm = FallbackManager(store)
     with pytest.raises(AllModelsExhaustedError):
         import asyncio
+
         asyncio.run(fm.route_with_fallback({"messages": []}))
 
 

@@ -17,4 +17,4 @@ fi
 
 # Start server
 echo "Starting LLM Keypool server..."
-exec llm-keypool proxy --port 8000 --host 0.0.0.0
+exec llm-apipool proxy --port 8000 --host 0.0.0.0

@@ -1,6 +1,8 @@
 import { NavLink } from 'react-router-dom'
 import { Moon, Sun, Menu, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/api'
 
 function cn(...classes: (string | undefined | false)[]) {
   return classes.filter(Boolean).join(' ')
@@ -39,55 +41,98 @@ function Navbar() {
   const { dark, toggle } = useDarkMode()
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  const { data: routingOverride } = useQuery<{ models: string[]; override_active: boolean }>({
+    queryKey: ['routing-override'],
+    queryFn: () => apiFetch('/api/settings/routing-override'),
+    staleTime: 10_000,
+  })
+
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center px-4 sm:px-6">
-        <NavLink to="/" className="flex items-center gap-2 transition-opacity hover:opacity-70">
-          <span className="inline-block size-2 rounded-full bg-emerald-500" />
-          <span className="font-semibold tracking-tight text-sm">LLM Keypool</span>
+    <header className="sticky top-0 z-40 glass">
+      <div className="mx-auto flex h-14 max-w-6xl items-center px-4 sm:px-6">
+        {/* ── Logo ──────────────────────────────────────── */}
+        <NavLink to="/" className="group flex items-center gap-2.5">
+          <span className="relative flex size-7 items-center justify-center rounded-lg bg-gradient-accent shadow-glow transition-transform duration-200 group-hover:scale-110">
+            <span className="size-3 rounded-sm bg-white/90" />
+          </span>
+          <span className="font-heading font-bold tracking-tight text-sm bg-gradient-accent bg-clip-text text-transparent">
+            LLM Keypool
+          </span>
         </NavLink>
 
-        <nav className="ml-10 hidden items-center gap-6 md:flex">
+        {/* ── Desktop nav ───────────────────────────────── */}
+        <nav className="ml-10 hidden items-center gap-1 md:flex">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'relative text-sm py-4 transition-colors',
+                  'relative px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200',
                   isActive
-                    ? 'text-foreground after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'text-primary bg-primary/10'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                 )
               }
             >
-              {item.label}
+              {({ isActive }) => (
+                <>
+                  {item.label}
+                  {isActive && (
+                    <span className="absolute -bottom-[11px] left-1/2 -translate-x-1/2 size-1.5 rounded-full bg-primary animate-pulse-glow" />
+                  )}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
 
-        <div className="ml-auto hidden items-center gap-1 md:flex">
+        {/* ── Right section ─────────────────────────────── */}
+        <div className="ml-auto hidden items-center gap-2 md:flex">
+          {routingOverride?.override_active && (
+            <NavLink
+              to="/settings"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gradient-warm text-white shadow-sm hover:shadow-md transition-all"
+            >
+              <span className="inline-block size-1.5 rounded-full bg-white/80 animate-pulse" />
+              Pinned: {routingOverride.models[0]}
+            </NavLink>
+          )}
           <button
             onClick={toggle}
-            className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            className="inline-flex items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-accent hover:bg-accent/10 transition-all duration-200"
+            aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
         </div>
 
-        <div className="ml-auto md:hidden">
+        {/* ── Mobile hamburger ──────────────────────────── */}
+        <div className="ml-auto md:hidden flex items-center gap-2">
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
+            aria-label="Toggle menu"
           >
             {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
           </button>
         </div>
       </div>
 
+      {/* ── Mobile menu ─────────────────────────────────── */}
       {mobileOpen && (
-        <div className="md:hidden border-t bg-background">
-          <nav className="flex flex-col p-4 gap-1">
+        <div className="animate-slide-down border-t border-border/50 bg-background/95 backdrop-blur-lg md:hidden">
+          <nav className="flex flex-col gap-0.5 p-3">
+            {routingOverride?.override_active && (
+              <NavLink
+                to="/settings"
+                onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium bg-gradient-warm text-white"
+              >
+                <span className="inline-block size-1.5 rounded-full bg-white/80 animate-pulse" />
+                Pinned: {routingOverride.models[0]}
+              </NavLink>
+            )}
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
@@ -95,10 +140,10 @@ function Navbar() {
                 onClick={() => setMobileOpen(false)}
                 className={({ isActive }) =>
                   cn(
-                    'px-3 py-2 rounded-md text-sm transition-colors',
+                    'rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200',
                     isActive
-                      ? 'bg-accent text-accent-foreground font-medium'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                   )
                 }
               >
@@ -107,7 +152,7 @@ function Navbar() {
             ))}
             <button
               onClick={toggle}
-              className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-accent"
+              className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
             >
               {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
               {dark ? 'Light mode' : 'Dark mode'}

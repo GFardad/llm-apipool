@@ -1,4 +1,5 @@
 """Extended tests for KeyStore - uncovered edge cases."""
+
 from __future__ import annotations
 
 import logging
@@ -7,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from llm_keypool.key_store import KeyStore, _mask_key, _resolve_db_path
+from llm_apipool.key_store import KeyStore, _mask_key, _resolve_db_path
 
 
 # ===================================================================
@@ -51,12 +52,12 @@ class TestMaskKey:
 def test_resolve_db_path_both_exist(tmp_path, monkeypatch):
     """When both old and new DB paths exist, a warning is logged (lines 34-38)."""
     # Clear env vars so _resolve_db_path uses module defaults
-    monkeypatch.delenv("LLM_KEYPOOL_DB", raising=False)
-    monkeypatch.delenv("LLM_AGGREGATOR_DB", raising=False)
+    monkeypatch.delenv("LLM_APIPOOL_DB", raising=False)
+    monkeypatch.delenv("LLM_APIPOOL_DB_LEGACY", raising=False)
 
-    import llm_keypool.key_store as ks
+    import llm_apipool.key_store as ks
 
-    new_db_dir = tmp_path / ".llm-keypool"
+    new_db_dir = tmp_path / ".llm-apipool"
     old_db_dir = tmp_path / ".llm-aggregator"
     new_db_dir.mkdir(parents=True)
     old_db_dir.mkdir(parents=True)
@@ -66,7 +67,9 @@ def test_resolve_db_path_both_exist(tmp_path, monkeypatch):
     monkeypatch.setattr(ks, "_NEW_DB_DEFAULT", new_db_dir / "keys.db")
     monkeypatch.setattr(ks, "_OLD_DB_DEFAULT", old_db_dir / "keys.db")
 
-    with patch.object(logging.getLogger("llm_keypool.key_store"), "warning") as mock_warn:
+    with patch.object(
+        logging.getLogger("llm_apipool.key_store"), "warning"
+    ) as mock_warn:
         path = ks._resolve_db_path()
         mock_warn.assert_called_once()
         assert "Both" in mock_warn.call_args[0][0]
@@ -76,18 +79,22 @@ def test_resolve_db_path_both_exist(tmp_path, monkeypatch):
 def test_resolve_db_path_migration_from_old(tmp_path, monkeypatch):
     """When only old DB exists, it is copied to new path (lines 39-42)."""
     # Clear env vars so _resolve_db_path uses module defaults
-    monkeypatch.delenv("LLM_KEYPOOL_DB", raising=False)
-    monkeypatch.delenv("LLM_AGGREGATOR_DB", raising=False)
+    monkeypatch.delenv("LLM_APIPOOL_DB", raising=False)
+    monkeypatch.delenv("LLM_APIPOOL_DB_LEGACY", raising=False)
 
-    import llm_keypool.key_store as ks
+    import llm_apipool.key_store as ks
 
-    new_db_dir = tmp_path / ".llm-keypool"
+    new_db_dir = tmp_path / ".llm-apipool"
     old_db_dir = tmp_path / ".llm-aggregator"
     old_db_dir.mkdir(parents=True)
 
     conn = sqlite3.connect(str(old_db_dir / "keys.db"))
-    conn.execute("CREATE TABLE api_keys (id INTEGER PRIMARY KEY, provider TEXT, api_key TEXT)")
-    conn.execute("INSERT INTO api_keys (provider, api_key) VALUES ('groq', 'migrated_key')")
+    conn.execute(
+        "CREATE TABLE api_keys (id INTEGER PRIMARY KEY, provider TEXT, api_key TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO api_keys (provider, api_key) VALUES ('groq', 'migrated_key')"
+    )
     conn.commit()
     conn.close()
 
@@ -119,9 +126,9 @@ def test_resolve_db_path_migration_from_old(tmp_path, monkeypatch):
 
 
 def test_resolve_db_path_env_var(tmp_path, monkeypatch):
-    """LLM_KEYPOOL_DB env var overrides default path (lines 32-33)."""
+    """LLM_APIPOOL_DB env var overrides default path (lines 32-33)."""
     custom_db = tmp_path / "custom" / "my.db"
-    monkeypatch.setenv("LLM_KEYPOOL_DB", str(custom_db))
+    monkeypatch.setenv("LLM_APIPOOL_DB", str(custom_db))
     path = _resolve_db_path()
     assert path == custom_db
 
@@ -138,7 +145,9 @@ def test_parse_capabilities_invalid_json(store):
 
     # Directly inject invalid JSON
     conn = sqlite3.connect(str(store._db_path))
-    conn.execute("UPDATE api_keys SET capabilities = '{invalid_json' WHERE id = ?", (key["id"],))
+    conn.execute(
+        "UPDATE api_keys SET capabilities = '{invalid_json' WHERE id = ?", (key["id"],)
+    )
     conn.commit()
     conn.close()
 
@@ -149,7 +158,7 @@ def test_parse_capabilities_invalid_json(store):
 
 def test_parse_capabilities_json_returns_non_list(tmp_path):
     """When JSON parses but is not a list, fall back to general_purpose."""
-    from llm_keypool.key_store import KeyStore
+    from llm_apipool.key_store import KeyStore
 
     store = KeyStore(db_path=tmp_path / "type_err.db")
     store.register_key("groq", "key1", "general_purpose", None, {})
@@ -188,7 +197,9 @@ def test_record_usage_missing_key_silent(store):
     """record_usage on non-existent key returns silently (line 255)."""
     # Should not raise any exception
     store.record_usage(9999, tokens=100, was_429=False)
-    store.record_usage(9999, tokens=100, was_429=True, cooldown_until="2099-01-01T00:00:00")
+    store.record_usage(
+        9999, tokens=100, was_429=True, cooldown_until="2099-01-01T00:00:00"
+    )
 
 
 # ===================================================================

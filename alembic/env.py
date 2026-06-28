@@ -1,4 +1,5 @@
 """Alembic environment configuration with dynamic DB path resolution."""
+
 from __future__ import annotations
 
 import os
@@ -15,19 +16,21 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+
 # Resolve DB path same way as key_store.py
 def _resolve_db_path() -> str:
-    env = os.environ.get("LLM_KEYPOOL_DB") or os.environ.get("LLM_AGGREGATOR_DB")
+    env = os.environ.get("LLM_APIPOOL_DB") or os.environ.get("LLM_APIPOOL_DB_LEGACY")
     if env:
         return env
-    return str(Path.home() / ".llm-keypool" / "keys.db")
+    return str(Path.home() / ".llm-apipool" / "keys.db")
+
 
 # Override sqlalchemy.url with resolved path
 db_path = _resolve_db_path()
 config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
 
 # Import all models for autogenerate support
-from llm_keypool.key_store import SCHEMA  # noqa: E402, F401
+from llm_apipool.key_store import SCHEMA  # noqa: E402, F401
 
 
 def run_migrations_offline() -> None:

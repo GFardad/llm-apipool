@@ -4,6 +4,7 @@ Revision ID: 0006
 Revises: 0005
 Create Date: 2026-06-22
 """
+
 from __future__ import annotations
 from typing import Sequence, Union
 
@@ -19,12 +20,34 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     # Add scoring and group columns to api_keys table
     op.add_column("api_keys", sa.Column("context_size", sa.Integer(), nullable=True))
-    op.add_column("api_keys", sa.Column("accuracy_score", sa.Integer(), nullable=False, server_default="50"))
-    op.add_column("api_keys", sa.Column("speed_score", sa.Integer(), nullable=False, server_default="50"))
-    op.add_column("api_keys", sa.Column("reliability_score", sa.Integer(), nullable=False, server_default="50"))
-    op.add_column("api_keys", sa.Column("group_name", sa.Text(), nullable=False, server_default="default"))
-    op.add_column("api_keys", sa.Column("is_sticky_enabled", sa.Integer(), nullable=False, server_default="0"))
-    op.add_column("api_keys", sa.Column("sticky_ttl_hours", sa.Integer(), nullable=False, server_default="1"))
+    op.add_column(
+        "api_keys",
+        sa.Column("accuracy_score", sa.Integer(), nullable=False, server_default="50"),
+    )
+    op.add_column(
+        "api_keys",
+        sa.Column("speed_score", sa.Integer(), nullable=False, server_default="50"),
+    )
+    op.add_column(
+        "api_keys",
+        sa.Column(
+            "reliability_score", sa.Integer(), nullable=False, server_default="50"
+        ),
+    )
+    op.add_column(
+        "api_keys",
+        sa.Column("group_name", sa.Text(), nullable=False, server_default="default"),
+    )
+    op.add_column(
+        "api_keys",
+        sa.Column(
+            "is_sticky_enabled", sa.Integer(), nullable=False, server_default="0"
+        ),
+    )
+    op.add_column(
+        "api_keys",
+        sa.Column("sticky_ttl_hours", sa.Integer(), nullable=False, server_default="1"),
+    )
 
     # Add indexes for group_name and sticky sessions
     op.create_index("idx_api_keys_group", "api_keys", ["group_name"])

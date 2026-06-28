@@ -21,7 +21,7 @@ alembic/
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| DB path resolution | `alembic/env.py:_resolve_db_path()` | `LLM_KEYPOOL_DB` or `LLM_AGGREGATOR_DB`, else `~/.llm-keypool/keys.db` |
+| DB path resolution | `alembic/env.py:_resolve_db_path()` | `LLM_APIPOOL_DB` or `LLM_APIPOOL_DB_LEGACY`, else `~/.llm-apipool/keys.db` |
 | Initial schema | `versions/0001_initial_schema.py` | Base tables and indexes |
 | Base URL override | `versions/0002_add_base_url_override.py` | Adds `base_url_override` to `api_keys` |
 | Capabilities migration | `versions/0003_add_model_and_capabilities.py` | Adds `model`, `capabilities` |

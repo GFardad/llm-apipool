@@ -4,6 +4,7 @@ Revision ID: 0003
 Revises: 0002
 Create Date: 2026-06-20
 """
+
 from __future__ import annotations
 from typing import Sequence, Union
 
@@ -20,7 +21,12 @@ def upgrade() -> None:
     op.add_column("api_keys", sa.Column("model", sa.Text(), nullable=True))
     op.add_column(
         "api_keys",
-        sa.Column("capabilities", sa.Text(), nullable=False, server_default='["general_purpose"]'),
+        sa.Column(
+            "capabilities",
+            sa.Text(),
+            nullable=False,
+            server_default='["general_purpose"]',
+        ),
     )
 
 

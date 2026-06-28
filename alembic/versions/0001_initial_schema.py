@@ -1,9 +1,10 @@
-"""Initial schema - track version 1 of llm-keypool DB.
+"""Initial schema - track version 1 of llm-apipool DB.
 
 Revision ID: 0001
 Revises:
 Create Date: 2026-06-20
 """
+
 from __future__ import annotations
 from typing import Sequence, Union
 
@@ -25,15 +26,24 @@ def upgrade() -> None:
         sa.Column("api_key", sa.Text(), nullable=False),
         sa.Column("extra_params", sa.Text(), nullable=False, server_default="{}"),
         sa.Column("is_active", sa.Integer(), nullable=False, server_default="1"),
-        sa.Column("tokens_used_today", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("tokens_used_month", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column(
+            "tokens_used_today", sa.Integer(), nullable=False, server_default="0"
+        ),
+        sa.Column(
+            "tokens_used_month", sa.Integer(), nullable=False, server_default="0"
+        ),
         sa.Column("requests_today", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("requests_month", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("last_429_at", sa.Text(), nullable=True),
         sa.Column("cooldown_until", sa.Text(), nullable=True),
         sa.Column("daily_reset_date", sa.Text(), nullable=True),
         sa.Column("monthly_reset_month", sa.Text(), nullable=True),
-        sa.Column("added_at", sa.Text(), nullable=False, server_default=sa.text("datetime('now')")),
+        sa.Column(
+            "added_at",
+            sa.Text(),
+            nullable=False,
+            server_default=sa.text("datetime('now')"),
+        ),
         sa.Column("last_used_at", sa.Text(), nullable=True),
         sa.UniqueConstraint("provider", "api_key", name="uq_provider_api_key"),
     )
@@ -43,7 +53,12 @@ def upgrade() -> None:
         "rotation_state",
         sa.Column("category", sa.Text(), primary_key=True),
         sa.Column("cursor", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("updated_at", sa.Text(), nullable=True, server_default=sa.text("datetime('now')")),
+        sa.Column(
+            "updated_at",
+            sa.Text(),
+            nullable=True,
+            server_default=sa.text("datetime('now')"),
+        ),
     )
 
     # rotation_slot_counts table

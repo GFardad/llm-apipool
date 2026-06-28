@@ -1,6 +1,6 @@
-# Contributing to llm-keypool
+# Contributing to llm-apipool
 
-Thank you for considering contributing to llm-keypool! Please read this guide to get started.
+Thank you for considering contributing to llm-apipool! Please read this guide to get started.
 
 ## Development Setup
 
@@ -15,8 +15,8 @@ Thank you for considering contributing to llm-keypool! Please read this guide to
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/your-username/llm-keypool.git
-   cd llm-keypool
+   git clone https://github.com/your-username/llm-apipool.git
+   cd llm-apipool
    ```
 
 3. Create a virtual environment (optional but recommended):
@@ -46,7 +46,7 @@ pytest
 To run tests with coverage:
 
 ```bash
-pytest --cov=llm_keypool
+pytest --cov=llm_apipool
 ```
 
 ### Linting and Type Checking
@@ -68,18 +68,18 @@ ruff check --fix .
 Run the type checker:
 
 ```bash
-mypy --strict llm_keypool
+mypy --strict llm_apipool
 ```
 
 ### Adding a New Provider
 
-To add a new free-tier LLM provider to llm-keypool:
+To add a new free-tier LLM provider to llm-apipool:
 
-1. **Add provider metadata** to `llm_keypool/config/providers.json`:
+1. **Add provider metadata** to `llm_apipool/config/providers.json`:
    - Follow the existing format for each provider entry.
    - Include: `provider` name, `capabilities`, `base_url`, `openai_compatible` boolean, `default_model`, `models` list, `limits` (rpm, rpd), and `cooldown_fallback` strategy.
 
-2. **Implement header parsing** (if needed) in `llm_keypool/providers/headers.py`:
+2. **Implement header parsing** (if needed) in `llm_apipool/providers/headers.py`:
    - If the provider returns rate-limit headers, add a function to parse them and return cooldown timestamps.
    - Follow the pattern of existing provider functions (e.g., `_groq`, `_cerebras`).
    - Add your function to the `collect_rl_headers` and `extract_cooldown` dispatch maps.
@@ -111,4 +111,4 @@ Please use the GitHub issue tracker to report bugs or request features. Include:
 
 ### Thank You!
 
-Your contributions help make llm-keypool better for everyone. We appreciate your time and effort.
+Your contributions help make llm-apipool better for everyone. We appreciate your time and effort.

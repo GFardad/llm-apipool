@@ -3,6 +3,7 @@ node_modules/
 frontend/node_modules/
 frontend/build/
 frontend/dist/
+web/dist/
 
 # Coverage / reports
 .coverage
@@ -32,6 +33,19 @@ dist/
 build/
 .eggs/
 *.egg
+
+# Tool cache
+.mypy_cache/
+.ruff_cache/
+.codebase/
+.flowdeck/
+
+# Subprojects / vendor
+.freellmapi/
+.opencode/
+
+# Session artifacts
+summary.md
 
 # Virtual environments
 .venv/

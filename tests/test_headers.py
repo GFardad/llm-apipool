@@ -1,11 +1,18 @@
 """Tests for headers.py - rate-limit parsing and cooldown derivation."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from llm_keypool.providers.headers import (
-    _groq, _cerebras, _mistral, _interfaze, _github_models,
-    collect_rl_headers, extract_cooldown, extract_remaining_requests,
+from llm_apipool.providers.headers import (
+    _groq,
+    _cerebras,
+    _mistral,
+    _interfaze,
+    _github_models,
+    collect_rl_headers,
+    extract_cooldown,
+    extract_remaining_requests,
     _parse_duration_str,
 )
 
@@ -43,12 +50,18 @@ def test_collect_rl_headers_filters_correctly():
 
 
 def test_groq_no_cooldown_when_remaining():
-    headers = {"x-ratelimit-remaining-requests": "5", "x-ratelimit-reset-requests": "1m"}
+    headers = {
+        "x-ratelimit-remaining-requests": "5",
+        "x-ratelimit-reset-requests": "1m",
+    }
     assert _groq(headers, was_429=False) is None
 
 
 def test_groq_cooldown_on_exhaustion():
-    headers = {"x-ratelimit-remaining-requests": "0", "x-ratelimit-reset-requests": "30s"}
+    headers = {
+        "x-ratelimit-remaining-requests": "0",
+        "x-ratelimit-reset-requests": "30s",
+    }
     result = _groq(headers, was_429=False)
     assert result is not None
     parsed = datetime.fromisoformat(result)
@@ -157,6 +170,7 @@ def test_extract_remaining_requests_unknown():
 # ===================================================================
 # Edge cases: type coercion failures and uncovered branches
 # ===================================================================
+
 
 def test_groq_invalid_retry_after():
     """When retry-after is unparseable as float, falls through to request dimension."""

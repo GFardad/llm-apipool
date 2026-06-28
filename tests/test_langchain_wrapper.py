@@ -1,4 +1,5 @@
 """Tests for AggregatorChat - mock-based."""
+
 from __future__ import annotations
 
 import os
@@ -10,15 +11,19 @@ import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
 
 _tmp_dir = tempfile.mkdtemp()
-os.environ["LLM_KEYPOOL_DB"] = str(Path(_tmp_dir) / "wrapper_test.db")
+os.environ["LLM_APIPOOL_DB"] = str(Path(_tmp_dir) / "wrapper_test.db")
 
-from llm_keypool.langchain_wrapper import AggregatorChat  # noqa: E402
+from llm_apipool.langchain_wrapper import AggregatorChat  # noqa: E402
 
 
 # --- helpers ---
 
-def _make_complete_result(text="hello", tokens=42, provider="groq", model="llama-3.3-70b"):
-    from llm_keypool.providers.base import CompletionResult
+
+def _make_complete_result(
+    text="hello", tokens=42, provider="groq", model="llama-3.3-70b"
+):
+    from llm_apipool.providers.base import CompletionResult
+
     result = CompletionResult(
         text=text,
         tokens_used=tokens,
@@ -27,14 +32,18 @@ def _make_complete_result(text="hello", tokens=42, provider="groq", model="llama
         was_429=False,
     )
     key_data = {
-        "provider": provider, "model": model, "key_id": 1,
-        "requests_today": 5, "tokens_used_today": 200,
+        "provider": provider,
+        "model": model,
+        "key_id": 1,
+        "requests_today": 5,
+        "tokens_used_today": 200,
     }
     return result, key_data
 
 
 def _make_error_result(error="quota exceeded"):
-    from llm_keypool.providers.base import CompletionResult
+    from llm_apipool.providers.base import CompletionResult
+
     result = CompletionResult(
         text="",
         tokens_used=0,
@@ -48,20 +57,20 @@ def _make_error_result(error="quota exceeded"):
 
 # --- AggregatorChat ---
 
-class TestAggregatorChat:
 
+class TestAggregatorChat:
     def test_llm_type(self):
         chat = AggregatorChat()
-        assert chat._llm_type == "llm_keypool"
+        assert chat._llm_type == "llm_apipool"
 
     def test_identifying_params(self):
         chat = AggregatorChat(category="general_purpose")
         params = chat._identifying_params
-        assert "keypool/general_purpose" in params["model"]
+        assert "apipool/general_purpose" in params["model"]
         assert params["capabilities"] == ["general_purpose"]
 
-    @patch("llm_keypool.providers.dispatch.complete", new_callable=AsyncMock)
-    @patch("llm_keypool.langchain_wrapper._build_rotator")
+    @patch("llm_apipool.providers.dispatch.complete", new_callable=AsyncMock)
+    @patch("llm_apipool.langchain_wrapper._build_rotator")
     def test_generate_success(self, mock_rotator, mock_complete):
         mock_complete.return_value = _make_complete_result(text="Paris", tokens=20)
         mock_rotator.return_value = MagicMock()
@@ -73,10 +82,12 @@ class TestAggregatorChat:
         assert len(result.generations) == 1
         assert result.generations[0].message.content == "Paris"
 
-    @patch("llm_keypool.providers.dispatch.complete", new_callable=AsyncMock)
-    @patch("llm_keypool.langchain_wrapper._build_rotator")
+    @patch("llm_apipool.providers.dispatch.complete", new_callable=AsyncMock)
+    @patch("llm_apipool.langchain_wrapper._build_rotator")
     def test_generate_includes_provider_metadata(self, mock_rotator, mock_complete):
-        mock_complete.return_value = _make_complete_result(provider="mistral", model="mistral-large-latest")
+        mock_complete.return_value = _make_complete_result(
+            provider="mistral", model="mistral-large-latest"
+        )
         mock_rotator.return_value = MagicMock()
 
         chat = AggregatorChat()
@@ -86,8 +97,8 @@ class TestAggregatorChat:
         assert meta["provider"] == "mistral"
         assert meta["model"] == "mistral-large-latest"
 
-    @patch("llm_keypool.providers.dispatch.complete", new_callable=AsyncMock)
-    @patch("llm_keypool.langchain_wrapper._build_rotator")
+    @patch("llm_apipool.providers.dispatch.complete", new_callable=AsyncMock)
+    @patch("llm_apipool.langchain_wrapper._build_rotator")
     def test_generate_token_usage(self, mock_rotator, mock_complete):
         mock_complete.return_value = _make_complete_result(tokens=150)
         mock_rotator.return_value = MagicMock()
@@ -98,18 +109,18 @@ class TestAggregatorChat:
         usage = result.generations[0].message.usage_metadata
         assert usage["total_tokens"] == 150
 
-    @patch("llm_keypool.providers.dispatch.complete", new_callable=AsyncMock)
-    @patch("llm_keypool.langchain_wrapper._build_rotator")
+    @patch("llm_apipool.providers.dispatch.complete", new_callable=AsyncMock)
+    @patch("llm_apipool.langchain_wrapper._build_rotator")
     def test_generate_error_raises(self, mock_rotator, mock_complete):
         mock_complete.return_value = _make_error_result("all keys exhausted")
         mock_rotator.return_value = MagicMock()
 
         chat = AggregatorChat()
-        with pytest.raises(RuntimeError, match="llm-keypool error"):
+        with pytest.raises(RuntimeError, match="llm-apipool error"):
             chat._generate([HumanMessage(content="hello")])
 
-    @patch("llm_keypool.providers.dispatch.complete", new_callable=AsyncMock)
-    @patch("llm_keypool.langchain_wrapper._build_rotator")
+    @patch("llm_apipool.providers.dispatch.complete", new_callable=AsyncMock)
+    @patch("llm_apipool.langchain_wrapper._build_rotator")
     def test_system_message_forwarded(self, mock_rotator, mock_complete):
         mock_complete.return_value = _make_complete_result()
         mock_rotator.return_value = MagicMock()
@@ -133,8 +144,8 @@ class TestAggregatorChat:
         assert chat.temperature == 0.7
         assert chat.rotate_every == 5
 
-    @patch("llm_keypool.providers.dispatch.complete", new_callable=AsyncMock)
-    @patch("llm_keypool.langchain_wrapper._build_rotator")
+    @patch("llm_apipool.providers.dispatch.complete", new_callable=AsyncMock)
+    @patch("llm_apipool.langchain_wrapper._build_rotator")
     def test_response_metadata_includes_quota_fields(self, mock_rotator, mock_complete):
         mock_complete.return_value = _make_complete_result(tokens=50, provider="groq")
         mock_rotator.return_value = MagicMock()
@@ -151,10 +162,13 @@ class TestAggregatorChat:
         assert meta["key_id"] == 1
 
     def test_pool_status_returns_list(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("LLM_KEYPOOL_DB", str(tmp_path / "ps_test.db"))
-        from llm_keypool.key_store import KeyStore
+        monkeypatch.setenv("LLM_APIPOOL_DB", str(tmp_path / "ps_test.db"))
+        from llm_apipool.key_store import KeyStore
+
         store = KeyStore()
-        store.register_key("groq", "key1", "general_purpose", "llama-3.3-70b-versatile", {})
+        store.register_key(
+            "groq", "key1", "general_purpose", "llama-3.3-70b-versatile", {}
+        )
 
         chat = AggregatorChat(category="general_purpose")
         status = chat.pool_status()
@@ -177,8 +191,8 @@ class TestBuildRotator:
 
     def test_build_rotator_creates_instance(self, tmp_path, monkeypatch):
         """_build_rotator returns a Rotator with correct settings."""
-        monkeypatch.setenv("LLM_KEYPOOL_DB", str(tmp_path / "rot_test.db"))
-        from llm_keypool.langchain_wrapper import _build_rotator
+        monkeypatch.setenv("LLM_APIPOOL_DB", str(tmp_path / "rot_test.db"))
+        from llm_apipool.langchain_wrapper import _build_rotator
 
         rotator = _build_rotator(rotate_every=3)
         assert rotator is not None
@@ -192,7 +206,7 @@ class TestRunAsyncWithLoop:
     @pytest.mark.asyncio
     async def test_run_async_from_running_loop(self):
         """_run_async uses concurrent.futures when a loop is already running."""
-        from llm_keypool.langchain_wrapper import _run_async
+        from llm_apipool.langchain_wrapper import _run_async
 
         async def dummy_coro():
             return 42
@@ -204,7 +218,7 @@ class TestRunAsyncWithLoop:
 class TestCurrentKey:
     """current_key method (line 138)."""
 
-    @patch("llm_keypool.langchain_wrapper._build_rotator")
+    @patch("llm_apipool.langchain_wrapper._build_rotator")
     def test_current_key_returns_peek(self, mock_build):
         """current_key returns result of rotator.peek_current_key."""
         mock_rotator = MagicMock()
@@ -218,7 +232,7 @@ class TestCurrentKey:
         assert result == expected
         mock_rotator.peek_current_key.assert_called_once_with(chat.capabilities)
 
-    @patch("llm_keypool.langchain_wrapper._build_rotator")
+    @patch("llm_apipool.langchain_wrapper._build_rotator")
     def test_current_key_returns_none(self, mock_build):
         """current_key returns None when no key is available."""
         mock_rotator = MagicMock()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from llm_keypool.core.sticky import (
+from llm_apipool.core.sticky import (
     clear_all,
     get_all_sessions,
     get_or_create,
