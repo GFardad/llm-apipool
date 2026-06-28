@@ -8,7 +8,6 @@ and audit_log data — no new schema changes required.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
