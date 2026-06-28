@@ -1,5 +1,9 @@
+# ── Build arguments ──────────────────────────────────────────────────────────
+ARG NODE_VERSION=20
+ARG PYTHON_VERSION=3.11
+
 # ── Build frontend ──────────────────────────────────────────────────────────
-FROM node:20-alpine AS frontend-builder
+FROM node:${NODE_VERSION}-alpine AS frontend-builder
 
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
@@ -9,7 +13,7 @@ COPY frontend/ .
 RUN npm run build
 
 # ── Build Python package ────────────────────────────────────────────────────
-FROM python:3.11-slim AS builder
+FROM python:${PYTHON_VERSION}-slim AS builder
 
 WORKDIR /build
 COPY llm_apipool/ ./llm_apipool/
@@ -20,11 +24,19 @@ COPY --from=frontend-builder /build/web/ ./web/
 RUN pip install --no-cache-dir build && python -m build --wheel
 
 # ── Runtime ─────────────────────────────────────────────────────────────────
-FROM python:3.11-slim
+FROM python:${PYTHON_VERSION}-slim
+
+LABEL org.opencontainers.image.source=https://github.com/GFardad/llm-apipool
+LABEL org.opencontainers.image.description="LLM API Key Pool Manager"
+LABEL org.opencontainers.image.licenses=MIT
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN addgroup --system --gid 1001 appuser && \
+    adduser --system --uid 1001 --ingroup appuser appuser
 
 WORKDIR /app
 
@@ -37,6 +49,9 @@ COPY --from=frontend-builder /build/web/ /app/web/
 
 # Volume for persistent data
 VOLUME ["/data"]
+
+# Switch to non-root user
+USER appuser
 
 ENV LLM_APIPOOL_DB=/data/keys.db \
     LLM_APIPOOL_API_KEY="" \
