@@ -72,9 +72,9 @@ interface UsageResponse {
 }
 
 function StateBadge({ state }: { state: string }) {
-  if (state === 'open') return <Badge className="bg-red-500/10 text-red-600 border-red-200 text-[10px]">OPEN</Badge>
-  if (state === 'half-open') return <Badge className="bg-amber-500/10 text-amber-600 border-amber-200 text-[10px]">HALF-OPEN</Badge>
-  return <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 text-[10px]">CLOSED</Badge>
+  if (state === 'open') return <Badge className="bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/30 text-[10px]">OPEN</Badge>
+  if (state === 'half-open') return <Badge className="bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/30 text-[10px]">HALF-OPEN</Badge>
+  return <Badge className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30 text-[10px]">CLOSED</Badge>
 }
 
 function StatCard({ icon, label, value, color, sub }: {
@@ -178,7 +178,7 @@ export function AnalyticsPage() {
           >
             {t.label}
             {t.count != null && t.count > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center size-4 text-[10px] font-bold rounded-full bg-red-500/10 text-red-600">
+              <span className="ml-1.5 inline-flex items-center justify-center size-4 text-[10px] font-bold rounded-full bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400">
                 {t.count}
               </span>
             )}

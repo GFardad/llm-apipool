@@ -394,7 +394,7 @@ export function SettingsPage() {
         <CollapsibleSection title="Fallback Chain" description="Configure retry behavior when keys fail"
           icon={<Layers className="size-4 text-amber-500" />} defaultOpen>
           <div className="space-y-4">
-            <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 p-3 text-xs text-muted-foreground">
+            <div className="rounded-lg bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 dark:border-amber-500/30 p-3 text-xs text-muted-foreground">
               <strong className="text-amber-600">How it works:</strong> When a key fails (429, timeout, error),
               the fallback chain tries the next key, then the next provider, then the next tier.
             </div>
@@ -426,7 +426,7 @@ export function SettingsPage() {
         <CollapsibleSection title="Sticky Sessions" description="Route consecutive requests from the same session to the same model+key"
           icon={<Shield className="size-4 text-blue-500" />} defaultOpen>
           <div className="space-y-4">
-            <div className="rounded-lg bg-blue-500/5 border border-blue-500/20 p-3 text-xs text-muted-foreground">
+            <div className="rounded-lg bg-blue-500/5 dark:bg-blue-500/10 border border-blue-500/20 dark:border-blue-500/30 p-3 text-xs text-muted-foreground">
               <strong className="text-blue-600">How it works:</strong> Once a session is assigned to a key+model pair,
               all subsequent requests use the same pair until TTL expiry.
             </div>
@@ -473,7 +473,7 @@ export function SettingsPage() {
         <CollapsibleSection title="Slimey Mode" description="Latency-optimized routing — prefers the fastest available model"
           icon={<Gauge className="size-4 text-emerald-500" />}>
           <div className="space-y-4">
-            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/20 p-3 text-xs text-muted-foreground">
+            <div className="rounded-lg bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 dark:border-emerald-500/30 p-3 text-xs text-muted-foreground">
               <strong className="text-emerald-600">How it works:</strong> Slimey mode prioritizes low time-to-first-token
               and high throughput. Routes to the fastest option meeting your quality requirements.
             </div>
