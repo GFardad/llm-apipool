@@ -75,17 +75,17 @@ export function ModelHealthPanel() {
     <div className="space-y-4">
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg bg-green-500/10 p-3">
-          <div className="text-[10px] text-green-600">Healthy Models</div>
-          <div className="text-lg font-bold tabular-nums text-green-600">{healthyCount}</div>
+        <div className="rounded-lg bg-green-500/10 dark:bg-green-500/20 p-3">
+          <div className="text-[10px] text-green-600 dark:text-green-400">Healthy Models</div>
+          <div className="text-lg font-bold tabular-nums text-green-600 dark:text-green-400">{healthyCount}</div>
         </div>
-        <div className="rounded-lg bg-yellow-500/10 p-3">
-          <div className="text-[10px] text-yellow-600">On Cooldown</div>
-          <div className="text-lg font-bold tabular-nums text-yellow-600">{cooldownCount}</div>
+        <div className="rounded-lg bg-yellow-500/10 dark:bg-yellow-500/20 p-3">
+          <div className="text-[10px] text-yellow-600 dark:text-yellow-400">On Cooldown</div>
+          <div className="text-lg font-bold tabular-nums text-yellow-600 dark:text-yellow-400">{cooldownCount}</div>
         </div>
-        <div className="rounded-lg bg-red-500/10 p-3">
-          <div className="text-[10px] text-red-600">Active Cooldowns</div>
-          <div className="text-lg font-bold tabular-nums text-red-600">{activeCooldowns.length}</div>
+        <div className="rounded-lg bg-red-500/10 dark:bg-red-500/20 p-3">
+          <div className="text-[10px] text-red-600 dark:text-red-400">Active Cooldowns</div>
+          <div className="text-lg font-bold tabular-nums text-red-600 dark:text-red-400">{activeCooldowns.length}</div>
         </div>
       </div>
 
@@ -101,8 +101,8 @@ export function ModelHealthPanel() {
               .filter((m) => m.health === 'cooldown')
               .sort((a, b) => (a.cooldown_until ?? '').localeCompare(b.cooldown_until ?? ''))
               .map((m) => (
-                <div key={`${m.platform}:${m.model_id}`} className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border bg-yellow-500/5">
-                  <span className="size-2 rounded-full bg-yellow-500 shrink-0" />
+                <div key={`${m.platform}:${m.model_id}`} className="flex items-center gap-3 px-3 py-2 rounded-lg border border-border bg-yellow-500/5 dark:bg-yellow-500/10">
+                  <span className="size-2 rounded-full bg-yellow-500 dark:bg-yellow-400 shrink-0" />
                   <span className="font-mono text-xs flex-1 truncate">{m.model_id}</span>
                   <Badge variant="outline" className="text-[10px]">{m.platform}</Badge>
                   <span className="text-[10px] font-mono text-yellow-600 tabular-nums">
@@ -167,9 +167,9 @@ export function ModelHealthPanel() {
       )}
 
       {healthyCount > 0 && cooldownCount === 0 && activeCooldowns.length === 0 && (
-        <div className="rounded-lg border border-border bg-emerald-500/5 p-6 text-center">
-          <Activity className="size-8 mx-auto mb-2 text-emerald-500/40" />
-          <p className="text-sm text-emerald-600 font-medium">All models healthy</p>
+        <div className="rounded-lg border border-border bg-emerald-500/5 dark:bg-emerald-500/10 p-6 text-center">
+          <Activity className="size-8 mx-auto mb-2 text-emerald-500/40 dark:text-emerald-400/40" />
+          <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">All models healthy</p>
           <p className="text-xs text-muted-foreground mt-1">No rate limits or cooldowns detected.</p>
         </div>
       )}
