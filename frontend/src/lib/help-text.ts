@@ -41,6 +41,22 @@ export const HELP = {
   slimeyMaxTtft: 'Maximum acceptable Time To First Token in milliseconds. If the average TTFT over the last 5 requests exceeds this, the provider is considered unacceptable and the UID is unpinned. Default: 5000ms (5 seconds).',
   slimeyMinThroughput: 'Minimum acceptable throughput in tokens per second. If the average throughput over the last 5 requests falls below this, the provider is considered unacceptable. Default: 10 tokens/sec.',
 
+  // ── Prompt Caching ──
+  cacheEnabled: 'Cache identical API requests to reduce latency and conserve rate limits. Only applies to non-streaming requests. Requests are matched by SHA-256 hash of model + messages + parameters.',
+  cacheTtl: 'How long (in seconds) a cached response stays valid. After TTL expiry, the next identical request will fetch a fresh response. Default: 60 seconds.',
+  cacheMaxEntries: 'Maximum number of cached responses stored in memory. When full, the least recently used entry is evicted. Default: 1000 entries.',
+
+  // ── Key Health Scoring ──
+  healthScore: 'A 0-100 rating based on key reliability, speed, and rate-limit history. Weighted: success rate (50%), avg latency (25%), cooldown frequency (25%).',
+  healthScoreThreshold: 'Keys with a health score below this value will be automatically deactivated. Set to 0 to disable auto-disable. Default: 20.',
+  healthAutoDisable: 'When enabled, keys whose health score falls below the threshold are automatically deactivated. They can be manually re-enabled.',
+
+  // ── A/B Testing ──
+  abTesting: 'Route a percentage of traffic to an alternative model and compare performance side-by-side. Same user always gets the same model variant (hash-based assignment) for valid test results.',
+
+  // ── Benchmark ──
+  benchmarkPage: 'Test your API keys against a real prompt to compare speed, throughput, and reliability across providers. Results update in real-time as each key completes.',
+
   // ── Keys Page ──
   keyStatus: 'The current health status of this key. Green = healthy (recent requests succeeded). Yellow = in cooldown (temporarily disabled due to rate limit). Red = error state (repeated failures). Grey = inactive (manually disabled).',
   keyCooldown: 'This key is in cooldown due to a rate limit (429). It will be automatically re-enabled when the cooldown period expires. You can manually clear the cooldown using the button.',

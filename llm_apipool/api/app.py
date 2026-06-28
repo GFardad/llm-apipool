@@ -29,6 +29,7 @@ from llm_apipool.api.routes.logs import _create_logs_router
 from llm_apipool.api.routes.media import _create_media_router
 from llm_apipool.api.routes.models import _create_models_router
 from llm_apipool.api.routes.settings import _create_settings_router
+from llm_apipool.api.routes.benchmark import _create_benchmark_router
 from llm_apipool.api.routes.bulk_import import _create_bulk_import_router
 from llm_apipool.api.routes.tiers import _create_tiers_router
 from llm_apipool.core.health_check import HealthCheckService
@@ -162,6 +163,7 @@ def make_app(
     app.include_router(_create_embeddings_router(store))
     app.include_router(_create_media_router(store, rotator, configs, capabilities))
     app.include_router(_create_freemodels_router(store=store))
+    app.include_router(_create_benchmark_router(store=store))
 
     # Serve React dashboard from web/dist (built frontend) via catch-all route
     # Mount approach (app.mount) fails for sub-paths — empty mount path doesn't

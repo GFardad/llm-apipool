@@ -12,6 +12,9 @@ vi.mock('@/components/ui/card', () => ({
   CardTitle: ({ children }: { children: React.ReactNode }) => <div data-testid="card-title">{children}</div>,
   CardDescription: ({ children }: { children: React.ReactNode }) => <div data-testid="card-description">{children}</div>,
 }))
+vi.mock('@/components/ui/label', () => ({
+  Label: ({ children, ...props }: { children: React.ReactNode } & React.ComponentPropsWithoutRef<'label'>) => <label {...props}>{children}</label>,
+}))
 vi.mock('@/components/ui/button', () => ({
   Button: ({ children, ...props }: React.ComponentPropsWithoutRef<'button'>) => <button {...props}>{children}</button>,
 }))
@@ -70,6 +73,8 @@ vi.mock('lucide-react', () => ({
   CircleDot: () => <span data-testid="icon-circle-dot">○</span>,
   Gauge: () => <span data-testid="icon-gauge">📏</span>,
   Timer: () => <span data-testid="icon-timer">⏱</span>,
+  Database: () => <span data-testid="icon-database">🗄</span>,
+  BarChart3: () => <span data-testid="icon-barchart3">📊</span>,
 }))
 
 // Mock the apiFetch module
@@ -94,6 +99,10 @@ function makeDefaultApiMock() {
               slimey: { enabled: false, max_ttft_ms: 3000, min_throughput: 20 } }
     })
     if (path.includes('fallback')) return Promise.resolve({ max_attempts_same_key: 3, max_attempts_same_provider: 3, max_attempts_all_providers: 3, cooldown_on_failure_ms: 1800000 })
+    if (path.includes('cache')) return Promise.resolve({ cache_enabled: true, cache_ttl: 60, cache_max_entries: 1000 })
+    if (path.includes('health')) return Promise.resolve({ health_score_threshold: 20, auto_disable: true })
+    if (path.includes('ab-testing')) return Promise.resolve({ enabled: false, traffic_percent: 50, method: 'hash' })
+    if (path.includes('slimey')) return Promise.resolve({ enabled: false, max_ttft_ms: 2000, min_throughput_rps: 10, tier: 1, strategy: 'balanced' })
     return Promise.resolve({})
   })
 }
@@ -125,6 +134,9 @@ describe('SettingsPage', () => {
         active_mode: 'fallback',
         modes: { fallback: { enabled: true }, sticky: {}, slimey: {} }
       })
+      if (path.includes('cache')) return Promise.resolve({ cache_enabled: true, cache_ttl: 60, cache_max_entries: 1000 })
+      if (path.includes('health')) return Promise.resolve({ health_score_threshold: 20, auto_disable: true })
+      if (path.includes('ab-testing')) return Promise.resolve({ enabled: false, traffic_percent: 50, method: 'hash' })
       return Promise.resolve({})
     })
     renderWithProviders(<SettingsPage />)
@@ -140,6 +152,9 @@ describe('SettingsPage', () => {
         active_mode: 'fallback',
         modes: { fallback: { enabled: true }, sticky: {}, slimey: {} }
       })
+      if (path.includes('cache')) return Promise.resolve({ cache_enabled: true, cache_ttl: 60, cache_max_entries: 1000 })
+      if (path.includes('health')) return Promise.resolve({ health_score_threshold: 20, auto_disable: true })
+      if (path.includes('ab-testing')) return Promise.resolve({ enabled: false, traffic_percent: 50, method: 'hash' })
       return Promise.resolve({})
     })
     renderWithProviders(<SettingsPage />)
@@ -158,6 +173,9 @@ describe('SettingsPage', () => {
       if (path.includes('routing-override')) return Promise.resolve({ models: [], override_active: false })
       if (path.includes('fallback')) return Promise.resolve({ max_attempts_same_key: 3, max_attempts_same_provider: 3, max_attempts_all_providers: 3, cooldown_on_failure_ms: 1800000 })
       if (path.includes('slimey')) return Promise.resolve({ enabled: false, max_ttft_ms: 2000, min_throughput_rps: 10, tier: 1, strategy: 'balanced' })
+      if (path.includes('cache')) return Promise.resolve({ cache_enabled: true, cache_ttl: 60, cache_max_entries: 1000 })
+      if (path.includes('health')) return Promise.resolve({ health_score_threshold: 20, auto_disable: true })
+      if (path.includes('ab-testing')) return Promise.resolve({ enabled: false, traffic_percent: 50, method: 'hash' })
       return Promise.resolve({})
     })
     renderWithProviders(<SettingsPage />)

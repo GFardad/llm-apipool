@@ -13,6 +13,7 @@ const navItems = [
   { to: '/playground', label: 'Playground' },
   { to: '/models', label: 'Models' },
   { to: '/analytics', label: 'Analytics' },
+  { to: '/benchmarks', label: 'Benchmarks' },
   { to: '/settings', label: 'Settings' },
 ]
 

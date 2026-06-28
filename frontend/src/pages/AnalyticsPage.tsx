@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Activity, KeyRound, BarChart3, AlertTriangle, Loader2, Gauge, Timer, Zap, Shield, Globe, Server } from 'lucide-react'
 import { HelpNode } from '@/components/ui/help-node'
 import { HELP } from '@/lib/help-text'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, BarChart, Bar } from 'recharts'
 
 interface Overview {
   total_keys: number
@@ -51,6 +52,25 @@ interface CircuitBreakerEntry {
   consecutive_failures: number
 }
 
+interface UsageBucket {
+  bucket: string
+  requests: number
+  errors: number
+  avg_latency_ms: number
+  p50_latency_ms: number
+  p95_latency_ms: number
+  tokens_in: number
+  tokens_out: number
+  error_rate: number
+}
+
+interface UsageResponse {
+  buckets: UsageBucket[]
+  total_requests: number
+  total_errors: number
+  overall_error_rate: number
+}
+
 function StateBadge({ state }: { state: string }) {
   if (state === 'open') return <Badge className="bg-red-500/10 text-red-600 border-red-200 text-[10px]">OPEN</Badge>
   if (state === 'half-open') return <Badge className="bg-amber-500/10 text-amber-600 border-amber-200 text-[10px]">HALF-OPEN</Badge>
@@ -77,8 +97,17 @@ function StatCard({ icon, label, value, color, sub }: {
   )
 }
 
+const tooltipStyle = {
+  background: 'hsl(var(--card))',
+  border: '1px solid hsl(var(--border))',
+  borderRadius: 8,
+  fontSize: 12,
+}
+
 export function AnalyticsPage() {
-  const [tab, setTab] = useState<'overview' | 'circuits'>('overview')
+  const [tab, setTab] = useState<'overview' | 'circuits' | 'usage'>('overview')
+  const [rangeDays, setRangeDays] = useState(30)
+  const [usageProvider, setUsageProvider] = useState('')
 
   const { data: overview } = useQuery<Overview>({
     queryKey: ['analytics-overview'],
@@ -102,14 +131,32 @@ export function AnalyticsPage() {
     refetchInterval: 10_000,
   })
 
+  const { data: usageData } = useQuery<UsageResponse>({
+    queryKey: ['usage-analytics', rangeDays, usageProvider],
+    queryFn: () => {
+      const params = new URLSearchParams({
+        period: 'day',
+        range_days: String(rangeDays),
+      })
+      if (usageProvider) params.set('provider', usageProvider)
+      return apiFetch(`/api/analytics/usage?${params}`)
+    },
+  })
+
+  const { data: providerList } = useQuery<{ providers: string[] }>({
+    queryKey: ['providers-list'],
+    queryFn: () => apiFetch('/api/providers'),
+  })
+
   const penalties = providersData?.penalties ?? []
 
   const openBreakers = breakers?.filter((b) => b.state === 'open') ?? []
   const halfOpenBreakers = breakers?.filter((b) => b.state === 'half-open') ?? []
 
   const tabs = [
-    { key: 'overview' as const, label: 'Overview', count: null },
+    { key: 'overview' as const, label: 'Overview', count: null as number | null },
     { key: 'circuits' as const, label: 'Circuit Breakers', count: openBreakers.length + halfOpenBreakers.length },
+    { key: 'usage' as const, label: 'Usage', count: null },
   ]
 
   const isLoading = statsLoading && !stats
@@ -118,7 +165,6 @@ export function AnalyticsPage() {
     <div>
       <PageHeader title="Analytics" description="Key pool health and provider performance" />
 
-      {/* Tab bar */}
       <div className="flex items-center gap-4 mb-4 border-b border-border">
         {tabs.map((t) => (
           <button
@@ -142,7 +188,6 @@ export function AnalyticsPage() {
 
       {tab === 'overview' && (
         <div className="space-y-6">
-          {/* Key pool cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <CardContent className="p-5">
@@ -170,7 +215,6 @@ export function AnalyticsPage() {
             </Card>
           </div>
 
-          {/* Real-time performance stats */}
           {stats && (
             <>
               <h2 className="text-sm font-medium flex items-center gap-2">
@@ -190,7 +234,6 @@ export function AnalyticsPage() {
             </>
           )}
 
-          {/* Provider breakdown */}
           {stats && Object.keys(stats.providers).length > 0 && (
             <div>
               <h2 className="text-sm font-medium mb-3">Provider Traffic <HelpNode content={HELP.providerTraffic} side="top" /></h2>
@@ -221,7 +264,6 @@ export function AnalyticsPage() {
             </div>
           )}
 
-          {/* Per-model latency */}
           {stats && Object.keys(stats.providers).length > 0 && (
             <div>
               <h2 className="text-sm font-medium mb-3">Per-Model Latency <HelpNode content={HELP.modelLatency} side="top" /></h2>
@@ -258,7 +300,6 @@ export function AnalyticsPage() {
             </div>
           )}
 
-          {/* Penalties */}
           <div>
             <h2 className="text-sm font-medium mb-3 flex items-center gap-2">
               <AlertTriangle className="size-4" /> Provider Penalties <HelpNode content={HELP.providerPenalties} side="top" />
@@ -366,6 +407,114 @@ export function AnalyticsPage() {
               </CardContent>
             </Card>
           </div>
+        </div>
+      )}
+
+      {tab === 'usage' && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+              {[7, 30, 90].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setRangeDays(d)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    rangeDays === d
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {d}d
+                </button>
+              ))}
+            </div>
+            {providerList?.providers && providerList.providers.length > 0 && (
+              <select
+                value={usageProvider}
+                onChange={(e) => setUsageProvider(e.target.value)}
+                className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
+              >
+                <option value="">All providers</option>
+                {providerList.providers.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-xs text-muted-foreground mb-1">Total Requests</div>
+                <div className="text-2xl font-bold tabular-nums text-foreground">
+                  {usageData?.total_requests.toLocaleString() ?? '-'}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-xs text-muted-foreground mb-1">Total Errors</div>
+                <div className="text-2xl font-bold tabular-nums text-red-500">
+                  {usageData?.total_errors.toLocaleString() ?? '-'}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-xs text-muted-foreground mb-1">Overall Error Rate</div>
+                <div className="text-2xl font-bold tabular-nums text-amber-500">
+                  {usageData != null ? `${(usageData.overall_error_rate * 100).toFixed(2)}%` : '-'}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardContent className="p-5">
+              <h3 className="text-sm font-medium mb-4">Latency Trend</h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={usageData?.buckets ?? []}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="bucket" tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))" />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Line type="monotone" dataKey="avg_latency_ms" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Avg Latency (ms)" />
+                  <Line type="monotone" dataKey="p95_latency_ms" stroke="hsl(215 90% 50%)" strokeWidth={1.5} dot={false} strokeDasharray="4 4" name="P95 Latency (ms)" />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5">
+              <h3 className="text-sm font-medium mb-4">Error Rate</h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart data={usageData?.buckets ?? []}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="bucket" tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))" />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Area type="monotone" dataKey="error_rate" stroke="hsl(var(--destructive))" fill="hsl(var(--destructive) / 0.15)" strokeWidth={2} name="Error Rate" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5">
+              <h3 className="text-sm font-medium mb-4">Token Usage</h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={usageData?.buckets ?? []}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="bucket" tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))" />
+                  <YAxis tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))" />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Bar dataKey="tokens_in" stackId="tokens" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} name="Tokens In" />
+                  <Bar dataKey="tokens_out" stackId="tokens" fill="hsl(215 90% 50%)" radius={[2, 2, 0, 0]} name="Tokens Out" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

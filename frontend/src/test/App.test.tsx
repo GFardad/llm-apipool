@@ -15,6 +15,9 @@ vi.mock('@/pages/ModelsPage', () => ({
 vi.mock('@/pages/AnalyticsPage', () => ({
   AnalyticsPage: () => <div data-testid="analytics-page">Analytics Page</div>,
 }))
+vi.mock('@/pages/BenchmarksPage', () => ({
+  BenchmarksPage: () => <div data-testid="benchmarks-page">Benchmarks Page</div>,
+}))
 vi.mock('@/pages/SettingsPage', () => ({
   SettingsPage: () => <div data-testid="settings-page">Settings Page</div>,
 }))
@@ -59,5 +62,11 @@ describe('App', () => {
     window.history.pushState({}, '', '/analytics')
     render(<App />)
     expect(screen.getByTestId('analytics-page')).toBeInTheDocument()
+  })
+
+  it('renders BenchmarksPage at /benchmarks route', () => {
+    window.history.pushState({}, '', '/benchmarks')
+    render(<App />)
+    expect(screen.getByTestId('benchmarks-page')).toBeInTheDocument()
   })
 })

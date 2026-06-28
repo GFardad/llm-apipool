@@ -35,7 +35,6 @@ from llm_apipool.core.affinity import (
     on_success as affinity_success,
     on_error as affinity_error,
 )
-from llm_apipool.core.fallback_modes import get_fallback_modes
 from llm_apipool.core.handoff import (
     get_handoff_mode,
     maybe_inject,

@@ -7,12 +7,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
 import { HelpNode } from '@/components/ui/help-node'
 import { HELP } from '@/lib/help-text'
 import {
   Save, Loader2, CheckCircle2, AlertCircle, X, ChevronRight,
   Route, GitBranch, Layers, PieChart, Zap, Shield, Activity, Search,
-  ArrowRight, CircleDot, Gauge, Timer,
+  ArrowRight, CircleDot, Gauge, Timer, Database, BarChart3,
 } from 'lucide-react'
 
 const STRATEGIES = ['auto', 'priority', 'balanced', 'smartest', 'fastest', 'reliable', 'custom'] as const
@@ -248,6 +249,43 @@ export function SettingsPage() {
   const [slimeyTierConfig, setSlimeyTierConfig] = useState(1)
   const [slimeyStrategy, setSlimeyStrategy] = useState('balanced')
 
+  // Prompt Caching state
+  const [cacheEnabled, setCacheEnabled] = useState(true)
+  const [cacheTtl, setCacheTtl] = useState(60)
+  const [cacheMaxEntries, setCacheMaxEntries] = useState(1000)
+  const { data: cacheData } = useQuery<{ cache_enabled: boolean; cache_ttl: number; cache_max_entries: number }>({
+    queryKey: ['cache-settings'], queryFn: () => apiFetch('/api/settings/cache'), staleTime: 30_000,
+  })
+  useEffect(() => { if (cacheData) { setCacheEnabled(cacheData.cache_enabled); setCacheTtl(cacheData.cache_ttl); setCacheMaxEntries(cacheData.cache_max_entries) } }, [cacheData])
+
+  // Health Scoring state
+  const [healthScoreThreshold, setHealthScoreThreshold] = useState(20)
+  const [healthAutoDisable, setHealthAutoDisable] = useState(true)
+  const { data: healthData } = useQuery<{ health_score_threshold: number; auto_disable: boolean }>({
+    queryKey: ['health-settings'], queryFn: () => apiFetch('/api/settings/health'), staleTime: 30_000,
+  })
+  useEffect(() => {
+    if (healthData) {
+      setHealthScoreThreshold(healthData.health_score_threshold)
+      setHealthAutoDisable(healthData.auto_disable)
+    }
+  }, [healthData])
+
+  // A/B Testing state
+  const [abTestEnabled, setAbTestEnabled] = useState(false)
+  const [abTestTraffic, setAbTestTraffic] = useState(50)
+  const [abTestMethod, setAbTestMethod] = useState('hash')
+  const { data: abData } = useQuery<{ enabled: boolean; traffic_percent: number; method: string }>({
+    queryKey: ['ab-testing'], queryFn: () => apiFetch('/api/settings/ab-testing'), staleTime: 30_000,
+  })
+  useEffect(() => {
+    if (abData) {
+      setAbTestEnabled(abData.enabled)
+      setAbTestTraffic(abData.traffic_percent)
+      setAbTestMethod(abData.method)
+    }
+  }, [abData])
+
   const [saveFeedback, setSaveFeedback] = useState<{ ok: boolean; msg: string } | null>(null)
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const showFeedback = (ok: boolean, msg: string) => {
@@ -297,6 +335,11 @@ export function SettingsPage() {
           fallback,
           forced_models: forcedModels.length > 0 ? forcedModels : [],
           slimey: { enabled: slimeyEnabled, max_ttft_ms: slimeyMaxTTFT, min_throughput_rps: slimeyMinThroughput, tier: slimeyTierConfig, strategy: slimeyStrategy },
+          cache_enabled: cacheEnabled,
+          cache_ttl: cacheTtl,
+          cache_max_entries: cacheMaxEntries,
+          health: { score_threshold: healthScoreThreshold, auto_disable: healthAutoDisable },
+          ab_testing: { enabled: abTestEnabled, traffic_percent: abTestTraffic, method: abTestMethod },
         }),
       })
     },
@@ -568,6 +611,85 @@ export function SettingsPage() {
                 onChange={(e) => setRouteOverrideModels(e.target.value)} />
               {roData?.override_active && <p className="text-xs text-amber-500 mt-1">Override active — routing is restricted to specified models only</p>}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Prompt Caching */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Database className="size-4 text-primary" /> Prompt Caching <HelpNode content={HELP.cacheEnabled} side="right" /></CardTitle>
+            <CardDescription>Cache identical API requests to reduce latency and conserve rate limits</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-xs cursor-pointer">Enable Caching <HelpNode content={HELP.cacheEnabled} side="top" /></span>
+              </div>
+              <Switch checked={cacheEnabled} onCheckedChange={setCacheEnabled} />
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs flex items-center gap-1.5">Cache TTL (seconds) <HelpNode content={HELP.cacheTtl} side="top" /></span>
+              <Input type="number" min={1} max={3600} value={cacheTtl} onChange={(e) => setCacheTtl(parseInt(e.target.value) || 60)} className="h-9" />
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs flex items-center gap-1.5">Max Cache Entries <HelpNode content={HELP.cacheMaxEntries} side="top" /></span>
+              <Input type="number" min={100} max={10000} value={cacheMaxEntries} onChange={(e) => setCacheMaxEntries(parseInt(e.target.value) || 1000)} className="h-9" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Health Scoring */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Activity className="size-4 text-primary" /> Key Health Scoring <HelpNode content={HELP.healthScore} side="right" /></CardTitle>
+            <CardDescription>Auto-evaluate key reliability and performance</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-xs cursor-pointer">Auto-disable low-score keys <HelpNode content={HELP.healthAutoDisable} side="top" /></span>
+              </div>
+              <Switch checked={healthAutoDisable} onCheckedChange={setHealthAutoDisable} />
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs flex items-center gap-1.5">Health Score Threshold <HelpNode content={HELP.healthScoreThreshold} side="top" /></span>
+              <Input type="number" min={0} max={100} value={healthScoreThreshold} onChange={(e) => setHealthScoreThreshold(parseInt(e.target.value) || 20)} className="h-9" />
+              <p className="text-xs text-muted-foreground">Keys below this score will be deactivated (set to 0 to disable)</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* A/B Testing */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><BarChart3 className="size-4 text-primary" /> Model A/B Testing <HelpNode content={HELP.abTesting} side="right" /></CardTitle>
+            <CardDescription>Route traffic to compare model performance side-by-side</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-xs cursor-pointer">Enable A/B Testing <HelpNode content={HELP.abTesting} side="top" /></span>
+              </div>
+              <Switch checked={abTestEnabled} onCheckedChange={setAbTestEnabled} />
+            </div>
+            {abTestEnabled && (
+              <>
+                <div className="space-y-1">
+                  <span className="text-xs flex items-center gap-1.5">Traffic Split <HelpNode content={HELP.abTesting} side="top" /></span>
+                  <div className="flex items-center gap-3">
+                    <Input type="range" min={0} max={100} value={abTestTraffic} onChange={(e) => setAbTestTraffic(parseInt(e.target.value))} className="flex-1" />
+                    <span className="text-sm font-mono w-10 text-center">{abTestTraffic}%</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs">Assignment Method</span>
+                  <select value={abTestMethod} onChange={(e) => setAbTestMethod(e.target.value)} className="h-9 px-3 rounded-md border bg-background text-sm">
+                    <option value="hash">Hash-based (consistent per user)</option>
+                    <option value="random">Random per request</option>
+                  </select>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

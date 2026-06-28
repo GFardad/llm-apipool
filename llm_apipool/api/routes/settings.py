@@ -32,6 +32,23 @@ class _SettingsRequest(BaseModel):
     custom_weights: dict[str, float] | None = None
 
 
+class _CacheSettingsRequest(BaseModel):
+    cache_enabled: bool | None = None
+    cache_ttl: int | None = None
+    cache_max_entries: int | None = None
+
+
+class _HealthRequest(BaseModel):
+    health_score_threshold: int | None = None
+    auto_disable: bool | None = None
+
+
+class _AbTestingRequest(BaseModel):
+    enabled: bool | None = None
+    traffic_percent: int | None = None
+    method: str | None = None
+
+
 class _StickyRequest(BaseModel):
     sticky_enabled: bool | None = None
     sticky_ttl_ms: int | None = None
@@ -90,6 +107,12 @@ class _FallbackModeConfigRequest(BaseModel):
     min_throughput: int | None = None
 
 
+class _CacheSettingsRequest(BaseModel):
+    cache_enabled: bool | None = None
+    cache_ttl: int | None = None
+    cache_max_entries: int | None = None
+
+
 class _SaveAllRequest(BaseModel):
     strategy: str | None = None
     custom_weights: dict[str, float] | None = None
@@ -108,9 +131,21 @@ class _SaveAllRequest(BaseModel):
     log_max_size_mb: int | None = None
     fallback_active_mode: str | None = None
     fallback_mode_configs: dict[str, dict] | None = None
+    cache_enabled: bool | None = None
+    cache_ttl: int | None = None
+    cache_max_entries: int | None = None
+    health_score_threshold: int | None = None
+    health_auto_disable: bool | None = None
+    ab_testing_enabled: bool | None = None
+    ab_testing_traffic_percent: int | None = None
+    ab_testing_method: str | None = None
 
 
-def _create_settings_router(store: Any = None, rotator: Any = None) -> APIRouter:
+def _create_settings_router(
+    store: Any = None,
+    rotator: Any = None,
+    cache: Any | None = None,
+) -> APIRouter:
     router = APIRouter()
 
     def _get_rotator() -> Any:
@@ -307,6 +342,116 @@ def _create_settings_router(store: Any = None, rotator: Any = None) -> APIRouter
         if r is None:
             return {"success": False, "error": "Rotator not available"}
         r.clear_forced_models()
+        return {"success": True}
+
+    @router.get("/api/settings/cache")
+    async def get_cache_settings() -> dict[str, Any]:
+        from llm_apipool.core.cache import (
+            is_cache_enabled as _is_enabled,
+            get_cache_ttl as _get_ttl,
+            get_cache_max_entries as _get_max,
+        )
+
+        return {
+            "cache_enabled": _is_enabled(),
+            "cache_ttl": _get_ttl(),
+            "cache_max_entries": _get_max(),
+        }
+
+    @router.put("/api/settings/cache")
+    async def set_cache_settings(req: _CacheSettingsRequest) -> dict[str, Any]:
+        from llm_apipool.core.cache import (
+            set_cache_enabled as _set_enabled,
+            set_cache_ttl as _set_ttl,
+            set_cache_max_entries as _set_max,
+        )
+
+        if req.cache_enabled is not None:
+            _set_enabled(req.cache_enabled)
+        if req.cache_ttl is not None:
+            if req.cache_ttl < 1:
+                from llm_apipool.api.errors import (
+                    INVALID_REQUEST_ERROR,
+                    error_response,
+                )
+
+                return error_response(
+                    400, "cache_ttl must be >= 1", INVALID_REQUEST_ERROR
+                )
+            _set_ttl(req.cache_ttl)
+        if req.cache_max_entries is not None:
+            if req.cache_max_entries < 1:
+                from llm_apipool.api.errors import (
+                    INVALID_REQUEST_ERROR,
+                    error_response,
+                )
+
+                return error_response(
+                    400, "cache_max_entries must be >= 1", INVALID_REQUEST_ERROR
+                )
+            _set_max(req.cache_max_entries)
+        # Clear cache when settings change so stale entries are not served
+        if cache is not None:
+            cache.clear()
+        return {"success": True}
+
+    # ── Health Scoring ────────────────────────────────────────────────────────
+
+    @router.get("/api/settings/health")
+    async def get_health_settings() -> dict[str, Any]:
+        from llm_apipool.core.health_scoring import (
+            get_health_score_threshold,
+            is_auto_disable_enabled,
+        )
+
+        return {
+            "health_score_threshold": get_health_score_threshold(),
+            "auto_disable": is_auto_disable_enabled(),
+        }
+
+    @router.put("/api/settings/health")
+    async def set_health_settings(req: _HealthRequest) -> dict[str, Any]:
+        from llm_apipool.core.health_scoring import (
+            set_health_score_threshold,
+            set_auto_disable_enabled,
+        )
+
+        if req.health_score_threshold is not None:
+            set_health_score_threshold(req.health_score_threshold)
+        if req.auto_disable is not None:
+            set_auto_disable_enabled(req.auto_disable)
+        return {"success": True}
+
+    # ── A/B Testing ───────────────────────────────────────────────────────────
+
+    @router.get("/api/settings/ab-testing")
+    async def get_ab_testing_settings() -> dict[str, Any]:
+        from llm_apipool.core.ab_testing import (
+            get_ab_testing_enabled,
+            get_ab_testing_traffic_percent,
+            get_ab_testing_method,
+        )
+
+        return {
+            "enabled": get_ab_testing_enabled(),
+            "traffic_percent": get_ab_testing_traffic_percent(),
+            "method": get_ab_testing_method(),
+        }
+
+    @router.put("/api/settings/ab-testing")
+    async def set_ab_testing_settings(req: _AbTestingRequest) -> dict[str, Any]:
+        from llm_apipool.core.ab_testing import (
+            set_ab_testing_enabled,
+            set_ab_testing_traffic_percent,
+            set_ab_testing_method,
+        )
+
+        if req.enabled is not None:
+            set_ab_testing_enabled(req.enabled)
+        if req.traffic_percent is not None:
+            set_ab_testing_traffic_percent(req.traffic_percent)
+        if req.method is not None:
+            set_ab_testing_method(req.method)
         return {"success": True}
 
     # ── Fallback modes ───────────────────────────────────────────────────
@@ -536,6 +681,79 @@ def _create_settings_router(store: Any = None, rotator: Any = None) -> APIRouter
                 if slimey_cfg.get("enabled") is not None:
                     sr.set_enabled(slimey_cfg["enabled"])
 
+        if req.cache_enabled is not None:
+            from llm_apipool.core.cache import set_cache_enabled as _set_enabled
+
+            try:
+                _set_enabled(req.cache_enabled)
+            except Exception as e:
+                errors.append(f"cache_enabled: {e}")
+
+        if req.cache_ttl is not None:
+            from llm_apipool.core.cache import set_cache_ttl as _set_ttl
+
+            try:
+                if req.cache_ttl < 1:
+                    errors.append("cache_ttl: must be >= 1")
+                else:
+                    _set_ttl(req.cache_ttl)
+            except Exception as e:
+                errors.append(f"cache_ttl: {e}")
+
+        if req.cache_max_entries is not None:
+            from llm_apipool.core.cache import set_cache_max_entries as _set_max
+
+            try:
+                if req.cache_max_entries < 1:
+                    errors.append("cache_max_entries: must be >= 1")
+                else:
+                    _set_max(req.cache_max_entries)
+            except Exception as e:
+                errors.append(f"cache_max_entries: {e}")
+
+        if req.health_score_threshold is not None:
+            from llm_apipool.core.health_scoring import set_health_score_threshold as _set_threshold
+
+            try:
+                _set_threshold(req.health_score_threshold)
+            except Exception as e:
+                errors.append(f"health_score_threshold: {e}")
+
+        if req.health_auto_disable is not None:
+            from llm_apipool.core.health_scoring import set_auto_disable_enabled as _set_auto
+
+            try:
+                _set_auto(req.health_auto_disable)
+            except Exception as e:
+                errors.append(f"health_auto_disable: {e}")
+
+        if req.ab_testing_enabled is not None:
+            from llm_apipool.core.ab_testing import set_ab_testing_enabled as _set_ab_enabled
+
+            try:
+                _set_ab_enabled(req.ab_testing_enabled)
+            except Exception as e:
+                errors.append(f"ab_testing_enabled: {e}")
+
+        if req.ab_testing_traffic_percent is not None:
+            from llm_apipool.core.ab_testing import set_ab_testing_traffic_percent as _set_ab_traffic
+
+            try:
+                _set_ab_traffic(req.ab_testing_traffic_percent)
+            except Exception as e:
+                errors.append(f"ab_testing_traffic_percent: {e}")
+
+        if req.ab_testing_method is not None:
+            from llm_apipool.core.ab_testing import set_ab_testing_method as _set_ab_method
+
+            try:
+                _set_ab_method(req.ab_testing_method)
+            except Exception as e:
+                errors.append(f"ab_testing_method: {e}")
+
+        if cache is not None:
+            cache.clear()
+
         # Persist all provided values to DB
         if store is not None:
             mapping = {
@@ -554,6 +772,14 @@ def _create_settings_router(store: Any = None, rotator: Any = None) -> APIRouter
                 "logging_enabled": req.logging_enabled,
                 "log_retention_days": req.log_retention_days,
                 "log_max_size_mb": req.log_max_size_mb,
+                "cache_enabled": req.cache_enabled,
+                "cache_ttl": req.cache_ttl,
+                "cache_max_entries": req.cache_max_entries,
+                "health_score_threshold": req.health_score_threshold,
+                "health_auto_disable": req.health_auto_disable,
+                "ab_testing_enabled": req.ab_testing_enabled,
+                "ab_testing_traffic_percent": req.ab_testing_traffic_percent,
+                "ab_testing_method": req.ab_testing_method,
             }
             for sk, sv in mapping.items():
                 if sv is not None:
@@ -685,6 +911,80 @@ def restore_settings_from_db(store: Any, rotator: Any) -> None:
                     )
                 if slimey_cfg.get("enabled") is not None:
                     sr.set_enabled(slimey_cfg["enabled"])
+    except Exception:
+        pass
+
+    try:
+        val = settings.get("cache_enabled")
+        if val is not None:
+            from llm_apipool.core.cache import set_cache_enabled as _set_enabled
+
+            _set_enabled(bool(val))
+    except Exception:
+        pass
+
+    try:
+        val = settings.get("cache_ttl")
+        if val is not None:
+            from llm_apipool.core.cache import set_cache_ttl as _set_ttl
+
+            _set_ttl(int(val))
+    except Exception:
+        pass
+
+    try:
+        val = settings.get("cache_max_entries")
+        if val is not None:
+            from llm_apipool.core.cache import set_cache_max_entries as _set_max
+
+            _set_max(int(val))
+    except Exception:
+        pass
+
+    # ── Health Scoring ────────────────────────────────────────────────────────
+    try:
+        val = settings.get("health_score_threshold")
+        if val is not None:
+            from llm_apipool.core.health_scoring import set_health_score_threshold as _set_threshold
+
+            _set_threshold(int(val))
+    except Exception:
+        pass
+
+    try:
+        val = settings.get("health_auto_disable")
+        if val is not None:
+            from llm_apipool.core.health_scoring import set_auto_disable_enabled as _set_auto
+
+            _set_auto(bool(val))
+    except Exception:
+        pass
+
+    # ── A/B Testing ───────────────────────────────────────────────────────────
+    try:
+        val = settings.get("ab_testing_enabled")
+        if val is not None:
+            from llm_apipool.core.ab_testing import set_ab_testing_enabled as _set_enabled
+
+            _set_enabled(bool(val))
+    except Exception:
+        pass
+
+    try:
+        val = settings.get("ab_testing_traffic_percent")
+        if val is not None:
+            from llm_apipool.core.ab_testing import set_ab_testing_traffic_percent as _set_traffic
+
+            _set_traffic(int(val))
+    except Exception:
+        pass
+
+    try:
+        val = settings.get("ab_testing_method")
+        if val is not None:
+            from llm_apipool.core.ab_testing import set_ab_testing_method as _set_method
+
+            _set_method(str(val))
     except Exception:
         pass
 
