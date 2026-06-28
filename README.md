@@ -8,8 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/GFardad/llm-apipool/actions"><img src="https://img.shields.io/github/actions/workflow/status/GFardad/llm-apipool/test.yml?branch=main&label=tests&logo=github" alt="Tests"></a>
-  <a href="https://pypi.org/project/llm-apipool/"><img src="https://img.shields.io/pypi/v/llm-apipool?logo=pypi" alt="PyPI"></a>
-  <a href="https://pypi.org/project/llm-apipool/"><img src="https://img.shields.io/pypi/dm/llm-apipool?logo=pypi&label=downloads" alt="Downloads"></a>
+  <a href="https://pypi.org/project/llm-apipool/"><img src="https://img.shields.io/badge/pypi-1.0.0-blue?logo=pypi" alt="PyPI v1.0.0"></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/python-3.11%20|%203.12-blue?logo=python" alt="Python"></a>
   <a href="https://github.com/GFardad/llm-apipool/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/badge/lint-ruff-orange?logo=ruff" alt="Ruff"></a>
