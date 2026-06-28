@@ -20,10 +20,10 @@ interface UnlockableGroup {
 }
 
 const TIER_COLORS: Record<number, string> = {
-  1: 'bg-emerald-500',
-  2: 'bg-blue-500',
-  3: 'bg-amber-500',
-  4: 'bg-orange-500',
+  1: 'bg-emerald-500 dark:bg-emerald-400',
+  2: 'bg-blue-500 dark:bg-blue-400',
+  3: 'bg-amber-500 dark:bg-amber-400',
+  4: 'bg-orange-500 dark:bg-orange-400',
 }
 
 export function UnlockableModelsPanel() {
