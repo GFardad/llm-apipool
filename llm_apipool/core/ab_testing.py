@@ -219,4 +219,52 @@ class ABTestManager:
         }
 
 
-__all__ = ["ABExperiment", "ABTestManager"]
+__all__ = [
+    "ABExperiment",
+    "ABTestManager",
+    "get_ab_testing_enabled",
+    "set_ab_testing_enabled",
+    "get_ab_testing_traffic_percent",
+    "set_ab_testing_traffic_percent",
+    "get_ab_testing_method",
+    "set_ab_testing_method",
+]
+
+
+# Global A/B testing settings (simplified getter/setter for MVP)
+_AB_TESTING_ENABLED = False
+_AB_TESTING_TRAFFIC_PERCENT = 50
+_AB_TESTING_METHOD: str = "hash"
+
+
+def get_ab_testing_enabled() -> bool:
+    """Return whether A/B testing is enabled globally."""
+    return _AB_TESTING_ENABLED
+
+
+def set_ab_testing_enabled(enabled: bool) -> None:
+    """Enable or disable A/B testing globally."""
+    global _AB_TESTING_ENABLED  # noqa: PLW0603
+    _AB_TESTING_ENABLED = enabled
+
+
+def get_ab_testing_traffic_percent() -> int:
+    """Return the traffic split percentage for model A (default 50)."""
+    return _AB_TESTING_TRAFFIC_PERCENT
+
+
+def set_ab_testing_traffic_percent(percent: int) -> None:
+    """Set the traffic split percentage for model A (0-100)."""
+    global _AB_TESTING_TRAFFIC_PERCENT  # noqa: PLW0603
+    _AB_TESTING_TRAFFIC_PERCENT = percent
+
+
+def get_ab_testing_method() -> str:
+    """Return the A/B testing method (default 'hash')."""
+    return _AB_TESTING_METHOD
+
+
+def set_ab_testing_method(method: str) -> None:
+    """Set the A/B testing method ('hash' or 'round-robin')."""
+    global _AB_TESTING_METHOD  # noqa: PLW0603
+    _AB_TESTING_METHOD = method

@@ -145,8 +145,39 @@ def compute_health_score_for_key(
     return compute_health_score(key_id, key_audit, metrics_data)
 
 
+# Global health score settings
+_HEALTH_SCORE_THRESHOLD = 70
+_AUTO_DISABLE_ENABLED = True
+
+
+def get_health_score_threshold() -> int:
+    """Return the current health score threshold for auto-disabling keys."""
+    return _HEALTH_SCORE_THRESHOLD
+
+
+def set_health_score_threshold(threshold: int) -> None:
+    """Set the health score threshold for auto-disabling keys (default 70)."""
+    global _HEALTH_SCORE_THRESHOLD  # noqa: PLW0603
+    _HEALTH_SCORE_THRESHOLD = threshold
+
+
+def get_auto_disable_enabled() -> bool:
+    """Return whether auto-disable on low health score is enabled."""
+    return _AUTO_DISABLE_ENABLED
+
+
+def set_auto_disable_enabled(enabled: bool) -> None:
+    """Enable or disable auto-disabling keys with low health scores."""
+    global _AUTO_DISABLE_ENABLED  # noqa: PLW0603
+    _AUTO_DISABLE_ENABLED = enabled
+
+
 __all__ = [
     "HEALTH_WEIGHTS",
     "compute_health_score",
     "compute_health_score_for_key",
+    "get_health_score_threshold",
+    "set_health_score_threshold",
+    "get_auto_disable_enabled",
+    "set_auto_disable_enabled",
 ]
