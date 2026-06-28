@@ -9,6 +9,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Send, Loader2, Clock, Copy, Check } from 'lucide-react'
 
+interface ChatResponse {
+  choices: { message: { content: string } }[]
+}
+
 interface Model {
   id: string
   owned_by: string
@@ -29,7 +33,7 @@ export function PlaygroundPage() {
   const testPrompt = useMutation({
     mutationFn: async () => {
       const start = Date.now()
-      const data = await apiFetch<{ choices: { message: { content: string } }[] }>('/v1/chat/completions', {
+      const data = await apiFetch<ChatResponse>('/v1/chat/completions', {
         method: 'POST',
         body: JSON.stringify({
           model,

@@ -1,10 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Navbar } from '@/components/navbar'
 import { KeysPage } from '@/pages/KeysPage'
-import { PlaygroundPage } from '@/pages/PlaygroundPage'
+import { LogsPage } from '@/pages/LogsPage'
 import { ModelsPage } from '@/pages/ModelsPage'
 import { AnalyticsPage } from '@/pages/AnalyticsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useEffect } from 'react'
 
 /** Scrolls to top on route change and triggers stagger re-animation. */
@@ -46,15 +47,19 @@ export default function App() {
               path="/keys"
               element={
                 <PageShell>
-                  <KeysPage />
+                  <ErrorBoundary>
+                    <KeysPage />
+                  </ErrorBoundary>
                 </PageShell>
               }
             />
             <Route
-              path="/playground"
+              path="/logs"
               element={
                 <PageShell>
-                  <PlaygroundPage />
+                  <ErrorBoundary>
+                    <LogsPage />
+                  </ErrorBoundary>
                 </PageShell>
               }
             />
@@ -62,7 +67,9 @@ export default function App() {
               path="/models"
               element={
                 <PageShell>
-                  <ModelsPage />
+                  <ErrorBoundary>
+                    <ModelsPage />
+                  </ErrorBoundary>
                 </PageShell>
               }
             />
@@ -70,7 +77,9 @@ export default function App() {
               path="/analytics"
               element={
                 <PageShell>
-                  <AnalyticsPage />
+                  <ErrorBoundary>
+                    <AnalyticsPage />
+                  </ErrorBoundary>
                 </PageShell>
               }
             />
@@ -78,7 +87,9 @@ export default function App() {
               path="/settings"
               element={
                 <PageShell>
-                  <SettingsPage />
+                  <ErrorBoundary>
+                    <SettingsPage />
+                  </ErrorBoundary>
                 </PageShell>
               }
             />

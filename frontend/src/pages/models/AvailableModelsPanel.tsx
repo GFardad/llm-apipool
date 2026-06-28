@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Loader2 } from 'lucide-react'
+import { HelpNode } from '@/components/ui/help-node'
+import { HELP } from '@/lib/help-text'
 
 interface AvailableModel {
   id: number
@@ -247,7 +249,7 @@ export function AvailableModelsPanel() {
 
                       {/* Tier badge */}
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium text-white ${TIER_COLORS[m.tier]}`}>
-                        T{m.tier}
+                        T{m.tier}<HelpNode content={HELP.modelTier} side="top" />
                       </span>
 
                       {/* Capabilities */}

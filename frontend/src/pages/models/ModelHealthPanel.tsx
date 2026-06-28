@@ -3,6 +3,8 @@ import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Loader2, Activity, RefreshCw } from 'lucide-react'
+import { HelpNode } from '@/components/ui/help-node'
+import { HELP } from '@/lib/help-text'
 
 interface CooldownRow {
   key_id: number
@@ -115,7 +117,9 @@ export function ModelHealthPanel() {
       {activeCooldowns.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-semibold text-muted-foreground">Rate-limit history</h3>
+            <h3 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+              Rate-limit history <HelpNode content={HELP.circuitBreaker} side="top" />
+            </h3>
             <Button
               variant="outline"
               size="xs"

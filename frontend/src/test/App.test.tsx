@@ -6,8 +6,8 @@ import App from '@/App'
 vi.mock('@/pages/KeysPage', () => ({
   KeysPage: () => <div data-testid="keys-page">Keys Page</div>,
 }))
-vi.mock('@/pages/PlaygroundPage', () => ({
-  PlaygroundPage: () => <div data-testid="playground-page">Playground</div>,
+vi.mock('@/pages/LogsPage', () => ({
+  LogsPage: () => <div data-testid="logs-page">Logs Page</div>,
 }))
 vi.mock('@/pages/ModelsPage', () => ({
   ModelsPage: () => <div data-testid="models-page">Models Page</div>,

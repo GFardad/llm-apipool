@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Key } from 'lucide-react'
+import { HelpNode } from '@/components/ui/help-node'
+import { HELP } from '@/lib/help-text'
 
 interface SampleModel {
   model_id: string
@@ -72,12 +74,15 @@ export function UnlockableModelsPanel() {
                 {g.model_count} free models
               </Badge>
             </div>
-            <button
-              onClick={() => window.location.href = `/keys?provider=${g.provider}`}
-              className="text-[11px] text-primary hover:text-primary/80 transition-colors font-medium"
-            >
-              Add key →
-            </button>
+            <div className="flex items-center gap-1">
+              <HelpNode content={HELP.unlockableModels} side="left" />
+              <button
+                onClick={() => window.location.href = `/keys?provider=${g.provider}`}
+                className="text-[11px] text-primary hover:text-primary/80 transition-colors font-medium"
+              >
+                Add key →
+              </button>
+            </div>
           </div>
 
           {/* Sample models */}
