@@ -43,7 +43,8 @@ class CloudflareProvider(BaseProvider):
             "provider": self.platform,
         }
         result = await complete(key_data, messages)
-        assert not isinstance(result, AsyncGenerator)
+        if isinstance(result, AsyncGenerator):
+            raise RuntimeError("Expected non-streaming result, got AsyncGenerator")
         return self._result_to_response(result, model)
 
     async def stream_chat_completion(
@@ -63,7 +64,8 @@ class CloudflareProvider(BaseProvider):
             "provider": self.platform,
         }
         _gen = await complete(key_data, messages, stream=True)
-        assert not isinstance(_gen, CompletionResult)
+        if isinstance(_gen, CompletionResult):
+            raise RuntimeError("Expected streaming result, got CompletionResult")
         async for chunk in _gen:
             yield self._dict_to_chunk(chunk, model)
 

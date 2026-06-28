@@ -13,9 +13,9 @@ def test_list_providers_returns_list():
 
 def test_get_model_info_known():
     info = get_model_info("groq", "llama-3.3-70b-versatile")
-    if info is not None:
-        assert "platform" in info
-        assert "context_window" in info
+    assert info is not None, "get_model_info should return data for known model"
+    assert "platform" in info
+    assert "context_window" in info
 
 
 def test_get_model_info_unknown():

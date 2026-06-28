@@ -53,7 +53,8 @@ class OpenAICompatProvider(BaseProvider):
             "provider": self.platform,
         }
         result = await _openai_complete(key_data, messages, stream=False)
-        assert not isinstance(result, AsyncGenerator)
+        if isinstance(result, AsyncGenerator):
+            raise RuntimeError("Expected non-streaming result, got AsyncGenerator")
         return self._to_response(result, model)
 
     async def stream_chat_completion(
@@ -73,7 +74,8 @@ class OpenAICompatProvider(BaseProvider):
             "provider": self.platform,
         }
         gen = await _openai_complete(key_data, messages, stream=True)
-        assert not isinstance(gen, CompletionResult)
+        if isinstance(gen, CompletionResult):
+            raise RuntimeError("Expected streaming result, got CompletionResult")
         async for chunk in gen:
             yield self._to_chunk(chunk, model)
 

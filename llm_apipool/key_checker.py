@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, cast
@@ -36,6 +37,8 @@ from typing import Any, cast
 import httpx
 
 from llm_apipool.providers.base import CompletionResult
+
+logger = logging.getLogger(__name__)
 
 
 _TEST_MESSAGES = [{"role": "user", "content": "test"}]

@@ -465,6 +465,7 @@ class Rotator:
         min_context: int | None = None,
         require_tools: bool | None = None,
         require_vision: bool | None = None,
+        uid: str | None = None,
     ) -> dict[str, Any] | None:
         """Select the best available key for the given capabilities."""
         # ── Force-provider override — bypass key DB entirely ────────────
@@ -498,6 +499,68 @@ class Rotator:
         active = self.store.get_active_keys(capabilities)
         if not active:
             return None
+
+        # ── Slimey pin check — if uid pinned to a key, use it directly ──
+        if uid:
+            from .core.slimey import get_slimey_router
+
+            sr = get_slimey_router()
+            if sr.is_enabled():
+                pin = sr.get_pin(uid)
+                if pin:
+                    pinned_provider, pinned_model, pinned_key_id, _ = pin
+                    for k in active:
+                        if (
+                            k["id"] == pinned_key_id
+                            and k["provider"] == pinned_provider
+                        ):
+                            if sr.is_qos_acceptable(
+                                uid, pinned_provider, pinned_model
+                            ):
+                                cfg = self.configs.get(k["provider"], {})
+                                try:
+                                    extra = json.loads(
+                                        k["extra_params"] or "{}"
+                                    )
+                                except json.JSONDecodeError:
+                                    extra = {}
+                                raw_base_url = (
+                                    k.get("base_url_override")
+                                    or cfg.get("base_url", "")
+                                )
+                                base_url = raw_base_url
+                                if "{account_id}" in base_url:
+                                    base_url = base_url.format(
+                                        account_id=extra.get("account_id", "")
+                                    )
+                                return {
+                                    "key_id": k["id"],
+                                    "provider": k["provider"],
+                                    "api_key": k["api_key"],
+                                    "base_url": base_url,
+                                    "model": k["model"]
+                                    or _resolve_model(cfg, cap_scope),
+                                    "capabilities": self.store.parse_capabilities(
+                                        k
+                                    ),
+                                    "cap_key": cap_scope,
+                                    "subscriber_id": subscriber_id,
+                                    "openai_compatible": cfg.get(
+                                        "openai_compatible", True
+                                    ),
+                                    "no_auth": cfg.get("no_auth", False),
+                                    "extra_params": extra,
+                                    "requests_today": k["requests_today"],
+                                    "tokens_used_today": k["tokens_used_today"],
+                                    "cycle_position": 1,
+                                    "rotate_every": self.rotate_every,
+                                }
+                            # QoS unacceptable — unpin so next request
+                            # falls through to normal routing.
+                            sr.record_error(
+                                uid, pinned_provider, pinned_model
+                            )
+                            break
 
         active_map = {k["id"]: k for k in active}
         self._ensure_order(
@@ -638,13 +701,16 @@ class Rotator:
             "rotate_every": self.rotate_every,
         }
 
-    def handle_429(
+    def handle_429(  # noqa: PLR0913
         self,
         key_id: int,
         provider: str,
         headers: dict[str, Any] | None = None,
         subscriber_id: str = "unknown",
         model: str = "",
+        http_method: str = "",
+        path: str = "",
+        is_streaming: bool = False,
     ) -> str:
         """Handle a 429 rate-limit response and set cooldown at both key and model level."""
         if key_id == -1:  # synthetic forced key — no DB state to manage
@@ -674,6 +740,9 @@ class Rotator:
             model=model,
             success=False,
             error="429 rate limit",
+            is_streaming=is_streaming,
+            http_method=http_method,
+            path=path,
         )
         return cooldown
 
@@ -684,6 +753,9 @@ class Rotator:
         subscriber_id: str = "unknown",
         model: str = "",
         error: str = "",
+        http_method: str = "",
+        path: str = "",
+        is_streaming: bool = False,
     ) -> None:
         """Handle a non-429 error (timeout, 5xx, connection error).
 
@@ -705,6 +777,9 @@ class Rotator:
             model=model,
             success=False,
             error=error or "non-429 error",
+            is_streaming=is_streaming,
+            http_method=http_method,
+            path=path,
         )
 
     def handle_success(  # noqa: PLR0913
@@ -717,6 +792,9 @@ class Rotator:
         latency_ms: int = 0,
         subscriber_id: str = "unknown",
         model: str = "",
+        http_method: str = "",
+        path: str = "",
+        is_streaming: bool = False,
     ) -> None:
         """Handle a successful API response, record usage and audit log."""
         if key_id == -1:  # synthetic forced key — no DB state to manage
@@ -747,6 +825,9 @@ class Rotator:
             tokens_out=tokens_used,
             latency_ms=latency_ms,
             success=True,
+            is_streaming=is_streaming,
+            http_method=http_method,
+            path=path,
         )
 
     def skip_key(self, key_id: int) -> None:

@@ -61,8 +61,10 @@ class ChatCompletionChunk:
 class ProviderHttpError(Exception):
     """HTTP error from provider with status code and optional retry-after."""
 
-    status: int | None = None
-    retry_after_ms: int | None = None
+    def __init__(self, status: int | None = None, retry_after_ms: int | None = None):
+        self.status = status
+        self.retry_after_ms = retry_after_ms
+        super().__init__(f"Provider HTTP error: status={status}")
 
 
 def parse_retry_after_ms(value: str | None) -> int | None:

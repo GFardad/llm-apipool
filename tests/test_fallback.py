@@ -69,14 +69,13 @@ def test_fallback_should_skip_provider(mock_store):
     assert fm._should_skip_provider("groq")
 
 
-def test_fallback_no_candidates():
+@pytest.mark.asyncio
+async def test_fallback_no_candidates():
     store = MagicMock()
     store.get_enabled_models.return_value = []
     fm = FallbackManager(store)
     with pytest.raises(AllModelsExhaustedError):
-        import asyncio
-
-        asyncio.run(fm.route_with_fallback({"messages": []}))
+        await fm.route_with_fallback({"messages": []})
 
 
 @pytest.mark.asyncio

@@ -32,8 +32,8 @@ def test_handoff_maybe_inject():
     record_incoming("inj1", messages)
     record_successful("inj1", "old_model")
     result, injected, tokens = maybe_inject("inj1", messages, "new_model")
-    if mode == "on_model_switch":
-        assert injected or not injected  # depends on model key comparison
+    # When handoff is on_model_switch and models differ, injection must occur
+    assert injected == (mode == "on_model_switch")
     assert isinstance(result, list)
 
 

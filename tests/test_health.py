@@ -31,3 +31,6 @@ async def test_check_key_health():
     key = {"id": 1, "provider": "groq", "api_key": "test", "is_active": 1}
     result = await check_key_health(store, key)
     assert result is not None
+    # Result can be dict (success) or string (error) depending on mock behavior
+    if isinstance(result, dict):
+        assert "status" in result or "latency_ms" in result or "error" in result

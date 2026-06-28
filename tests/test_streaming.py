@@ -1207,6 +1207,7 @@ class TestDispatchStreamComplete:
                 min_context=None,
                 require_tools=None,
                 require_vision=None,
+                uid=None,
             )
             # Stream lifecycle: success registered on exhaustion
             mock_rotator.handle_success.assert_called_once()

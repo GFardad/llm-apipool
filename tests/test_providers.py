@@ -81,15 +81,22 @@ class TestEstimateTokens:
 
     def test_fallback_on_tiktoken_failure(self, monkeypatch: pytest.MonkeyPatch):
         """When tiktoken unavailable, fall back to char/4 heuristic."""
+        from unittest import mock
+        import tiktoken
         import llm_apipool.providers.dispatch as dispatch_mod
-
-        monkeypatch.setattr(dispatch_mod, "_estimate_tokens", None)
-        # Restore original after test
-        monkeypatch.undo()
-        # Actually test the fallback path by making tiktoken raise
+        # Mock tiktoken.get_encoding to raise so the fallback path runs
+        monkeypatch.setattr(
+            tiktoken, "encoding_for_model", mock.Mock(side_effect=Exception("tiktoken failed"))
+        )
+        monkeypatch.setattr(
+            tiktoken, "get_encoding", mock.Mock(side_effect=Exception("tiktoken failed"))
+        )
+        # Clear any cached encoding
+        dispatch_mod._encoding_cache = {}
         messages = [{"role": "user", "content": "Hello, world!"}]
+        count = dispatch_mod._estimate_tokens(messages)
         expected = sum(len(m.get("content", "")) // 4 for m in messages)
-        assert expected >= 0
+        assert count == expected
 
 
 # ---------------------------------------------------------------------------

@@ -83,8 +83,9 @@ def write_entry(
 
     Stores full request/response bodies (truncated at 50KB to prevent
     unbounded file growth). For streaming responses only the metadata
-    and last 500 chars are stored.
+    and last 500 chars are stored. Also triggers periodic log cleanup.
     """
+    _maybe_cleanup()
     entry: dict[str, Any] = {
         "ts": datetime.now(UTC).isoformat(),
         "request_id": request_id,
@@ -254,54 +255,9 @@ def _maybe_cleanup() -> None:
 
     # Simple hash-based approach: cleanup if hash of current date mod 1000 < 1
     today_str = date.today().isoformat()
-    hash_val = int(hashlib.md5(today_str.encode()).hexdigest(), 16)
+    hash_val = int(hashlib.sha256(today_str.encode()).hexdigest(), 16)
     if hash_val % 1000 == 0:
         _cleanup_old_logs()
 
 
-# Update write_entry to call cleanup occasionally
-_original_write_entry = write_entry
 
-
-def write_entry(
-    request_id: str,
-    *,
-    method: str,
-    path: str,
-    subscriber_id: str,
-    model: str,
-    provider: str,
-    latency_ms: int,
-    status_code: int,
-    tokens_in: int = 0,
-    tokens_out: int = 0,
-    error: str | None = None,
-    request_body: str | None = None,
-    response_body: str | None = None,
-    key_id: int | None = None,
-    stream: bool = False,
-) -> None:
-    """Append a single structured log entry (thread-safe write).
-
-    Stores full request/response bodies (truncated at 50KB to prevent
-    unbounded file growth). For streaming responses only the metadata
-    and last 500 chars are stored.
-    """
-    _maybe_cleanup()
-    return _original_write_entry(
-        request_id=request_id,
-        method=method,
-        path=path,
-        subscriber_id=subscriber_id,
-        model=model,
-        provider=provider,
-        latency_ms=latency_ms,
-        status_code=status_code,
-        tokens_in=tokens_in,
-        tokens_out=tokens_out,
-        error=error,
-        request_body=request_body,
-        response_body=response_body,
-        key_id=key_id,
-        stream=stream,
-    )

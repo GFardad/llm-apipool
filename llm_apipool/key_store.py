@@ -11,7 +11,57 @@ import shutil
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
+
+
+class KeyRow(TypedDict, total=False):
+    id: int
+    provider: str
+    api_key: str
+    base_url_override: str | None
+    capabilities: str
+    model: str | None
+    extra_params: str
+    is_active: int
+    status: str
+    tokens_used_today: int
+    tokens_used_month: int
+    requests_today: int
+    requests_month: int
+    last_429_at: str | None
+    cooldown_until: str | None
+    daily_reset_date: str | None
+    monthly_reset_month: str | None
+    added_at: str
+    last_used_at: str | None
+    context_size: int | None
+    accuracy_score: int
+    speed_score: int
+    reliability_score: int
+    group_name: str
+    is_sticky_enabled: int
+    sticky_ttl_hours: int
+    priority: int
+
+
+class AuditEntry(TypedDict, total=False):
+    id: int
+    ts: str
+    subscriber_id: str
+    key_id: int | None
+    provider: str | None
+    model: str | None
+    tokens_in: int
+    tokens_out: int
+    latency_ms: int
+    success: int
+    error: str | None
+    is_streaming: int
+    ttfb_ms: int
+    http_status: int
+    http_method: str
+    path: str
+    client_ip: str
 
 from llm_apipool.core.encryption import (
     maybe_decrypt_key,
@@ -354,6 +404,13 @@ MIGRATIONS = [
     "key_id INTEGER REFERENCES api_keys(id) ON DELETE CASCADE, "
     "reason TEXT NOT NULL DEFAULT 'user', "
     "created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+    # ── Audit log enrichment columns ─────────────────────────────────────
+    "ALTER TABLE audit_log ADD COLUMN is_streaming INTEGER DEFAULT 0",
+    "ALTER TABLE audit_log ADD COLUMN ttfb_ms INTEGER DEFAULT 0",
+    "ALTER TABLE audit_log ADD COLUMN http_status INTEGER DEFAULT 0",
+    "ALTER TABLE audit_log ADD COLUMN http_method TEXT DEFAULT ''",
+    "ALTER TABLE audit_log ADD COLUMN path TEXT DEFAULT ''",
+    "ALTER TABLE audit_log ADD COLUMN client_ip TEXT DEFAULT ''",
 ]
 
 
@@ -899,14 +956,22 @@ class KeyStore:
         latency_ms: int = 0,
         success: bool = True,  # noqa: FBT001, FBT002
         error: str | None = None,
+        is_streaming: bool = False,
+        ttfb_ms: int = 0,
+        http_status: int = 0,
+        http_method: str = "",
+        path: str = "",
+        client_ip: str = "",
     ) -> None:
         """Log an API call to the audit trail."""
         now = datetime.now(UTC).isoformat()
         with self._conn() as conn:
             conn.execute(
                 """INSERT INTO audit_log
-                   (ts, subscriber_id, key_id, provider, model, tokens_in, tokens_out, latency_ms, success, error)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (ts, subscriber_id, key_id, provider, model, tokens_in, tokens_out,
+                    latency_ms, success, error, is_streaming, ttfb_ms, http_status,
+                    http_method, path, client_ip)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     now,
                     subscriber_id,
@@ -918,6 +983,12 @@ class KeyStore:
                     latency_ms,
                     1 if success else 0,
                     error,
+                    1 if is_streaming else 0,
+                    ttfb_ms,
+                    http_status,
+                    http_method,
+                    path,
+                    client_ip,
                 ),
             )
 
@@ -1033,17 +1104,22 @@ class KeyStore:
         reliability_score: int | None = None,
     ) -> bool:
         """Update a key's scoring metrics. Returns True if updated."""
-        updates = []
+        ALLOWED_COLUMNS: frozenset[str] = frozenset({
+            "accuracy_score", "speed_score", "reliability_score",
+        })
+        updates: list[str] = []
         values: list[Any] = []
-        if accuracy_score is not None:
-            updates.append("accuracy_score = ?")
-            values.append(accuracy_score)
-        if speed_score is not None:
-            updates.append("speed_score = ?")
-            values.append(speed_score)
-        if reliability_score is not None:
-            updates.append("reliability_score = ?")
-            values.append(reliability_score)
+        col_map = {
+            "accuracy_score": accuracy_score,
+            "speed_score": speed_score,
+            "reliability_score": reliability_score,
+        }
+        for col, val in col_map.items():
+            if val is not None:
+                if col not in ALLOWED_COLUMNS:
+                    raise ValueError(f"Column {col!r} is not allowed in UPDATE")
+                updates.append(f"{col} = ?")
+                values.append(val)
         if not updates:
             return False
         values.append(key_id)
@@ -1303,17 +1379,22 @@ class KeyStore:
         supports_vision: bool | None = None,
         supports_tools: bool | None = None,
     ) -> bool:
-        updates = []
+        ALLOWED_COLUMNS: frozenset[str] = frozenset({
+            "context_window", "supports_vision", "supports_tools",
+        })
+        updates: list[str] = []
         values: list[Any] = []
-        if context_window is not None:
-            updates.append("context_window = ?")
-            values.append(context_window)
-        if supports_vision is not None:
-            updates.append("supports_vision = ?")
-            values.append(1 if supports_vision else 0)
-        if supports_tools is not None:
-            updates.append("supports_tools = ?")
-            values.append(1 if supports_tools else 0)
+        col_map = {
+            "context_window": context_window,
+            "supports_vision": supports_vision if supports_vision is None else (1 if supports_vision else 0),
+            "supports_tools": supports_tools if supports_tools is None else (1 if supports_tools else 0),
+        }
+        for col, val in col_map.items():
+            if val is not None:
+                if col not in ALLOWED_COLUMNS:
+                    raise ValueError(f"Column {col!r} is not allowed in UPDATE")
+                updates.append(f"{col} = ?")
+                values.append(val)
         if not updates:
             return False
         values.append(model_id)

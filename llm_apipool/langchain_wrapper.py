@@ -204,7 +204,8 @@ class AggregatorChat(BaseChatModel):
             msg = f"llm-apipool error: {result.error}"
             raise RuntimeError(msg)
 
-        assert key_data is not None
+        if key_data is None:
+            raise RuntimeError("No key_data available from dispatch")
         model_name = key_data["model"] or key_data["provider"]
         tokens = result.tokens_used or 0
 

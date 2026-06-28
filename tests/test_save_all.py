@@ -339,7 +339,7 @@ def test_save_all_multiple_errors(client):
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data["errors"]) >= 2  # at least 2 of the 3 should error
+    assert len(data["errors"]) == 3  # all three fields are invalid
     assert data["success"] is True  # errors collected but overall call succeeds
 
 
