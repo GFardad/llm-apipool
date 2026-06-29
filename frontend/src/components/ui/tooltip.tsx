@@ -16,10 +16,10 @@ export function Tooltip({ content, children, side = 'top' }: TooltipProps) {
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent
         side={side}
-        className="z-50 max-w-xs rounded-lg border border-zinc-700/50 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 shadow-xl backdrop-blur-sm"
+        className="z-50 max-w-xs rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground shadow-xl backdrop-blur-sm"
       >
         {content}
-        <TooltipPrimitive.Arrow className="fill-zinc-700/50" />
+        <TooltipPrimitive.Arrow className="fill-border" />
       </TooltipContent>
     </TooltipRoot>
   )

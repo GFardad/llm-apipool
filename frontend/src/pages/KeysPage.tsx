@@ -426,12 +426,12 @@ export function KeysPage() {
                             <div key={k.key} className="border rounded-lg p-3 text-xs space-y-2">
                               <div className="flex items-center justify-between">
                                 <span className="font-mono text-[11px]">{k.key.slice(0, 24)}\u2026</span>
-                                {isResolved ? <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20">{k.detected_provider}</Badge> :
-                                  <Badge variant="outline" className="text-[10px] text-amber-600">{k.status === 'ambiguous' ? 'Multiple matched' : 'No match'}</Badge>}
+                         {isResolved ? <Badge className="text-[10px] bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 dark:border-emerald-500/30">{k.detected_provider}</Badge> :
+                                   <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-400">{k.status === 'ambiguous' ? 'Multiple matched' : 'No match'}</Badge>}
                               </div>
                               <div className="flex flex-wrap gap-1">
                                 {k.probed.map((p) => (
-                                  <span key={p.provider} className={`text-[10px] px-1.5 py-0.5 rounded ${p.success ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>{p.provider}</span>
+                                  <span key={p.provider} className={`text-[10px] px-1.5 py-0.5 rounded ${p.success ? 'bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'}`}>{p.provider}</span>
                                 ))}
                               </div>
                               {!isResolved && (
@@ -558,16 +558,16 @@ export function KeysPage() {
                 <div className="flex items-center gap-2">
                   <div className="hidden sm:flex items-end gap-1"><MockSparkline values={sparkValues} color="hsl(346, 75%, 52%)" /></div>
                   <span className="text-[10px] text-muted-foreground tabular-nums">{totalRequests} req</span>
-                  {activeKeys.length > 0 && (
-                    <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/25 text-[10px]">
-                      <Zap className="size-3 mr-0.5" /> {activeKeys.length} active
-                    </Badge>
-                  )}
-                  {cooldownKeys.length > 0 && (
-                    <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/25 text-[10px]">
-                      <Timer className="size-3 mr-0.5" /> {cooldownKeys.length} cooling
-                    </Badge>
-                  )}
+                   {activeKeys.length > 0 && (
+                     <Badge className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 dark:border-emerald-500/30 text-[10px]">
+                       <Zap className="size-3 mr-0.5" /> {activeKeys.length} active
+                     </Badge>
+                   )}
+                   {cooldownKeys.length > 0 && (
+                     <Badge className="bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/25 dark:border-amber-500/30 text-[10px]">
+                       <Timer className="size-3 mr-0.5" /> {cooldownKeys.length} cooling
+                     </Badge>
+                   )}
                   <Badge variant="outline" className="text-[10px]">{providerKeys.length} keys</Badge>
                   <Button variant="ghost" size="xs" onClick={() => setProviderModal(provider)} className="h-7 px-2 text-xs">
                     <Settings2 className="size-3 mr-1" /> Manage
@@ -588,11 +588,11 @@ export function KeysPage() {
                             className="rounded border-border accent-primary shrink-0" />
                         )}
                         <div className="relative shrink-0" data-testid="status-indicator">
-                          <span className={`block size-2.5 rounded-full ${
-                            key.is_active ? (isHealthy ? 'bg-emerald-500' : isOnCooldown ? 'bg-amber-500' : 'bg-red-500') : 'bg-muted-foreground/30'
-                          }`} />
+                           <span className={`block size-2.5 rounded-full ${
+                             key.is_active ? (isHealthy ? 'bg-emerald-500 dark:bg-emerald-400' : isOnCooldown ? 'bg-amber-500 dark:bg-amber-400' : 'bg-red-500 dark:bg-red-400') : 'bg-muted-foreground/30'
+                           }`} />
                           <HelpNode content={HELP.keyStatus} side="top" />
-                          {isHealthy && <span className="absolute inset-0 size-2.5 rounded-full bg-emerald-500/30 animate-pulse" />}
+                           {isHealthy && <span className="absolute inset-0 size-2.5 rounded-full bg-emerald-500/30 dark:bg-emerald-400/30 animate-pulse" />}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
@@ -898,14 +898,14 @@ function ProviderModal({
                   <div className="text-[10px] text-muted-foreground">Total Keys</div>
                   <div className="text-lg font-bold tabular-nums">{keys.length}</div>
                 </div>
-                <div className="bg-accent/30 rounded-lg p-3">
-                  <div className="text-[10px] text-muted-foreground">Active</div>
-                  <div className="text-lg font-bold tabular-nums text-emerald-600">{activeKeys.length}</div>
-                </div>
-                <div className="bg-accent/30 rounded-lg p-3">
-                  <div className="text-[10px] text-muted-foreground">Synced Models</div>
-                  <div className="text-lg font-bold tabular-nums text-blue-600">{models.length}</div>
-                </div>
+                 <div className="bg-accent/30 rounded-lg p-3">
+                   <div className="text-[10px] text-muted-foreground">Active</div>
+                   <div className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{activeKeys.length}</div>
+                 </div>
+                 <div className="bg-accent/30 rounded-lg p-3">
+                   <div className="text-[10px] text-muted-foreground">Synced Models</div>
+                   <div className="text-lg font-bold tabular-nums text-blue-600 dark:text-blue-400">{models.length}</div>
+                 </div>
               </div>
 
               {/* Key list */}
@@ -921,15 +921,15 @@ function ProviderModal({
                       className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/20 transition-colors"
                     >
                       {/* Status indicator */}
-                      <span
-                        className={`size-2.5 rounded-full shrink-0 ${
-                          key.is_active
-                            ? isKeyHealthySimple(key)
-                              ? 'bg-emerald-500'
-                              : 'bg-amber-500'
-                            : 'bg-muted-foreground/30'
-                        }`}
-                      />
+                        <span
+                          className={`size-2.5 rounded-full shrink-0 ${
+                            key.is_active
+                              ? isKeyHealthySimple(key)
+                                ? 'bg-emerald-500 dark:bg-emerald-400'
+                                : 'bg-amber-500 dark:bg-amber-400'
+                              : 'bg-muted-foreground/30'
+                          }`}
+                        />
 
                       {/* Key info */}
                       <div className="flex-1 min-w-0">
@@ -962,11 +962,11 @@ function ProviderModal({
                         className="text-muted-foreground hover:text-primary transition-colors shrink-0 p-1.5 rounded hover:bg-accent"
                         title="Copy API key"
                       >
-                        {copyFeedback === `key-${key.id}` ? (
-                          <Check className="size-4 text-emerald-500" />
-                        ) : (
-                          <Copy className="size-4" />
-                        )}
+                         {copyFeedback === `key-${key.id}` ? (
+                           <Check className="size-4 text-emerald-500 dark:text-emerald-400" />
+                         ) : (
+                           <Copy className="size-4" />
+                         )}
                       </button>
                     </div>
                   ))

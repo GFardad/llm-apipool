@@ -33,16 +33,16 @@ const TIER_LABELS: Record<number, string> = {
 }
 
 const TIER_COLORS: Record<number, string> = {
-  1: 'bg-emerald-500',
-  2: 'bg-blue-500',
-  3: 'bg-amber-500',
-  4: 'bg-orange-500',
+  1: 'bg-emerald-500 dark:bg-emerald-400',
+  2: 'bg-blue-500 dark:bg-blue-400',
+  3: 'bg-amber-500 dark:bg-amber-400',
+  4: 'bg-orange-500 dark:bg-orange-400',
 }
 
 const HEALTH_DOT: Record<string, string> = {
-  healthy: 'bg-emerald-500',
-  cooldown: 'bg-yellow-500',
-  error: 'bg-red-500',
+  healthy: 'bg-emerald-500 dark:bg-emerald-400',
+  cooldown: 'bg-yellow-500 dark:bg-yellow-400',
+  error: 'bg-red-500 dark:bg-red-400',
 }
 
 export function AvailableModelsPanel() {
@@ -123,17 +123,17 @@ export function AvailableModelsPanel() {
           <div className="text-[10px] text-muted-foreground">Available</div>
           <div className="text-lg font-bold tabular-nums">{models.length}</div>
         </div>
-        <div className="rounded-lg bg-emerald-500/10 p-3">
-          <div className="text-[10px] text-emerald-600">Verified Free</div>
-          <div className="text-lg font-bold tabular-nums text-emerald-600">{totalFree}</div>
+        <div className="rounded-lg bg-emerald-500/10 dark:bg-emerald-500/20 p-3">
+          <div className="text-[10px] text-emerald-600 dark:text-emerald-400">Verified Free</div>
+          <div className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{totalFree}</div>
         </div>
-        <div className="rounded-lg bg-green-500/10 p-3">
-          <div className="text-[10px] text-green-600">Healthy</div>
-          <div className="text-lg font-bold tabular-nums text-green-600">{totalHealthy}</div>
+        <div className="rounded-lg bg-green-500/10 dark:bg-green-500/20 p-3">
+          <div className="text-[10px] text-green-600 dark:text-green-400">Healthy</div>
+          <div className="text-lg font-bold tabular-nums text-green-600 dark:text-green-400">{totalHealthy}</div>
         </div>
-        <div className="rounded-lg bg-yellow-500/10 p-3">
-          <div className="text-[10px] text-yellow-600">Cooldown</div>
-          <div className="text-lg font-bold tabular-nums text-yellow-600">{totalCooldown}</div>
+        <div className="rounded-lg bg-yellow-500/10 dark:bg-yellow-500/20 p-3">
+          <div className="text-[10px] text-yellow-600 dark:text-yellow-400">Cooldown</div>
+          <div className="text-lg font-bold tabular-nums text-yellow-600 dark:text-yellow-400">{totalCooldown}</div>
         </div>
       </div>
 
@@ -198,21 +198,21 @@ export function AvailableModelsPanel() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 ml-auto">
-                  {verified > 0 && (
-                    <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 text-[10px]">
-                      {verified} verified free
-                    </Badge>
-                  )}
-                  {cooldown > 0 && (
-                    <Badge className="bg-yellow-500/10 text-yellow-600 border-yellow-200 text-[10px]">
-                      {cooldown} cooling
-                    </Badge>
-                  )}
-                  {healthy > 0 && (
-                    <Badge className="bg-green-500/10 text-green-600 border-green-200 text-[10px]">
-                      {healthy} ready
-                    </Badge>
-                  )}
+                   {verified > 0 && (
+                     <Badge className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30 text-[10px]">
+                       {verified} verified free
+                     </Badge>
+                   )}
+                   {cooldown > 0 && (
+                     <Badge className="bg-yellow-500/10 dark:bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/30 text-[10px]">
+                       {cooldown} cooling
+                     </Badge>
+                   )}
+                   {healthy > 0 && (
+                     <Badge className="bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-400 border-green-200 dark:border-green-500/30 text-[10px]">
+                       {healthy} ready
+                     </Badge>
+                   )}
                   <span className="text-xs text-muted-foreground">{isExpanded ? '▲' : '▼'}</span>
                 </div>
               </button>
@@ -235,11 +235,11 @@ export function AvailableModelsPanel() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="font-mono text-xs font-medium truncate">{m.model_id}</span>
-                          {m.free_verified_by === 'freellmapi' && (
-                            <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 text-[9px] px-1 py-0">
-                              FREE
-                            </Badge>
-                          )}
+                           {m.free_verified_by === 'freellmapi' && (
+                             <Badge className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30 text-[9px] px-1 py-0">
+                               FREE
+                             </Badge>
+                           )}
                         </div>
                         <div className="text-[10px] text-muted-foreground">
                           {m.display_name !== m.model_id ? m.display_name : m.size_label}
