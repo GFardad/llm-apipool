@@ -7,10 +7,20 @@ through the FastAPI backend at port 8000.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
 from llm_apipool.api.app import make_app
+
+# Skip all SPA serving tests when the frontend hasn't been built.
+# In CI, the Python test job runs in parallel with the frontend build,
+# so web/dist/ may not exist yet — these tests validate production
+# serving behavior and are not needed for basic code-level validation.
+_web_dist = Path(__file__).resolve().parent.parent / "web" / "dist"
+if not _web_dist.exists():
+    pytest.skip("Frontend not built — skipping SPA serving tests", allow_module_level=True)
 
 
 @pytest.fixture
