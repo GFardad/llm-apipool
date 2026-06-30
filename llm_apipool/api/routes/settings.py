@@ -541,7 +541,9 @@ def _create_settings_router(
             if updates.get("max_ttft_ms") or updates.get("min_throughput"):
                 sr.set_qos_config(
                     updates.get("max_ttft_ms", sr.get_qos_config()["max_ttft_ms"]),
-                    updates.get("min_throughput", sr.get_qos_config()["min_throughput"]),
+                    updates.get(
+                        "min_throughput", sr.get_qos_config()["min_throughput"]
+                    ),
                 )
             if updates.get("enabled") is not None:
                 sr.set_enabled(updates["enabled"])
@@ -675,8 +677,12 @@ def _create_settings_router(
                 sr = get_slimey_router()
                 if "max_ttft_ms" in slimey_cfg or "min_throughput" in slimey_cfg:
                     sr.set_qos_config(
-                        slimey_cfg.get("max_ttft_ms", sr.get_qos_config()["max_ttft_ms"]),
-                        slimey_cfg.get("min_throughput", sr.get_qos_config()["min_throughput"]),
+                        slimey_cfg.get(
+                            "max_ttft_ms", sr.get_qos_config()["max_ttft_ms"]
+                        ),
+                        slimey_cfg.get(
+                            "min_throughput", sr.get_qos_config()["min_throughput"]
+                        ),
                     )
                 if slimey_cfg.get("enabled") is not None:
                     sr.set_enabled(slimey_cfg["enabled"])
@@ -712,7 +718,9 @@ def _create_settings_router(
                 errors.append(f"cache_max_entries: {e}")
 
         if req.health_score_threshold is not None:
-            from llm_apipool.core.health_scoring import set_health_score_threshold as _set_threshold
+            from llm_apipool.core.health_scoring import (
+                set_health_score_threshold as _set_threshold,
+            )
 
             try:
                 _set_threshold(req.health_score_threshold)
@@ -720,7 +728,9 @@ def _create_settings_router(
                 errors.append(f"health_score_threshold: {e}")
 
         if req.health_auto_disable is not None:
-            from llm_apipool.core.health_scoring import set_auto_disable_enabled as _set_auto
+            from llm_apipool.core.health_scoring import (
+                set_auto_disable_enabled as _set_auto,
+            )
 
             try:
                 _set_auto(req.health_auto_disable)
@@ -728,7 +738,9 @@ def _create_settings_router(
                 errors.append(f"health_auto_disable: {e}")
 
         if req.ab_testing_enabled is not None:
-            from llm_apipool.core.ab_testing import set_ab_testing_enabled as _set_ab_enabled
+            from llm_apipool.core.ab_testing import (
+                set_ab_testing_enabled as _set_ab_enabled,
+            )
 
             try:
                 _set_ab_enabled(req.ab_testing_enabled)
@@ -736,7 +748,9 @@ def _create_settings_router(
                 errors.append(f"ab_testing_enabled: {e}")
 
         if req.ab_testing_traffic_percent is not None:
-            from llm_apipool.core.ab_testing import set_ab_testing_traffic_percent as _set_ab_traffic
+            from llm_apipool.core.ab_testing import (
+                set_ab_testing_traffic_percent as _set_ab_traffic,
+            )
 
             try:
                 _set_ab_traffic(req.ab_testing_traffic_percent)
@@ -744,7 +758,9 @@ def _create_settings_router(
                 errors.append(f"ab_testing_traffic_percent: {e}")
 
         if req.ab_testing_method is not None:
-            from llm_apipool.core.ab_testing import set_ab_testing_method as _set_ab_method
+            from llm_apipool.core.ab_testing import (
+                set_ab_testing_method as _set_ab_method,
+            )
 
             try:
                 _set_ab_method(req.ab_testing_method)
@@ -945,7 +961,9 @@ def restore_settings_from_db(store: Any, rotator: Any) -> None:
     try:
         val = settings.get("health_score_threshold")
         if val is not None:
-            from llm_apipool.core.health_scoring import set_health_score_threshold as _set_threshold
+            from llm_apipool.core.health_scoring import (
+                set_health_score_threshold as _set_threshold,
+            )
 
             _set_threshold(int(val))
     except Exception:
@@ -954,7 +972,9 @@ def restore_settings_from_db(store: Any, rotator: Any) -> None:
     try:
         val = settings.get("health_auto_disable")
         if val is not None:
-            from llm_apipool.core.health_scoring import set_auto_disable_enabled as _set_auto
+            from llm_apipool.core.health_scoring import (
+                set_auto_disable_enabled as _set_auto,
+            )
 
             _set_auto(bool(val))
     except Exception:
@@ -964,7 +984,9 @@ def restore_settings_from_db(store: Any, rotator: Any) -> None:
     try:
         val = settings.get("ab_testing_enabled")
         if val is not None:
-            from llm_apipool.core.ab_testing import set_ab_testing_enabled as _set_enabled
+            from llm_apipool.core.ab_testing import (
+                set_ab_testing_enabled as _set_enabled,
+            )
 
             _set_enabled(bool(val))
     except Exception:
@@ -973,7 +995,9 @@ def restore_settings_from_db(store: Any, rotator: Any) -> None:
     try:
         val = settings.get("ab_testing_traffic_percent")
         if val is not None:
-            from llm_apipool.core.ab_testing import set_ab_testing_traffic_percent as _set_traffic
+            from llm_apipool.core.ab_testing import (
+                set_ab_testing_traffic_percent as _set_traffic,
+            )
 
             _set_traffic(int(val))
     except Exception:

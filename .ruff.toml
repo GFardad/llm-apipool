@@ -1,0 +1,3 @@
+# Pre-existing E402 in key_store.py (import after TypedDict definition).
+[lint]
+ignore = ["E402"]

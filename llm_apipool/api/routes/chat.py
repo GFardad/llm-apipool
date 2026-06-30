@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 from llm_apipool.api.errors import (
+    INVALID_REQUEST_ERROR,
     RATE_LIMIT_ERROR,
     ROUTING_ERROR,
     SERVER_ERROR,
@@ -88,6 +89,9 @@ def _normalize_messages(messages: list[dict[str, Any]]) -> None:
         elif role == "tool":
             if msg.get("content") is None:
                 msg["content"] = ""
+        elif role == "function":
+            # Legacy ``function`` role (pre-tool-calling format) — treat as ``tool``.
+            msg["role"] = "tool"
 
 
 def _normalize_chunk(
@@ -156,7 +160,7 @@ def _create_chat_router(
         x_session_id: Annotated[str | None, Header()] = None,
     ) -> Any:
         from llm_apipool.core.model_parser import ModelParser
-        from llm_apipool.group_routing import extract_group, parse_context_filter
+        from llm_apipool.core.group_routing import extract_group, parse_context_filter
 
         # Normalize messages before any processing
         _normalize_messages(req.messages)
@@ -291,7 +295,12 @@ def _create_chat_router(
                 nonlocal _slimey_tokens, _slimey_first_chunk
                 async for chunk in gen:
                     # Slimey — record TTFT on first chunk
-                    if _slimey_active and _slimey_first_chunk and req.unicid and key_data:
+                    if (
+                        _slimey_active
+                        and _slimey_first_chunk
+                        and req.unicid
+                        and key_data
+                    ):
                         _slimey_first_chunk = False
                         ttft_ms = (time.monotonic() - _slimey_start) * 1000
                         get_slimey_router().record_ttft(
@@ -438,6 +447,13 @@ def _create_chat_router(
                 affinity_error(
                     req.unicid, key_data["key_id"], key_data.get("model", "")
                 )
+            # Use terminal_error_type to surface the correct HTTP status
+            # when all keys are exhausted.
+            term_type = getattr(result, "terminal_error_type", None)
+            if term_type == "request_shape":
+                return error_response(400, result.error, INVALID_REQUEST_ERROR)
+            if term_type == "rate_limit":
+                return error_response(429, result.error, RATE_LIMIT_ERROR)
             if result.was_429:
                 return error_response(429, result.error, RATE_LIMIT_ERROR)
             if "exhausted" in result.error.lower():

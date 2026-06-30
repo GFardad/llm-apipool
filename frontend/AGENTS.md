@@ -5,7 +5,7 @@
 
 ## OVERVIEW
 
-Single-page React app with 5 pages (Keys, Playground, Models, Analytics, Settings) routed via `react-router-dom`.
+Single-page React app with 6 pages (Keys, Playground, Models, Analytics, Benchmarks, Settings) routed via `react-router-dom`.
 Talks exclusively to the Python FastAPI backend at `http://localhost:8000` via Axios.
 All LLM interaction goes through the proxy; this UI never calls external APIs directly.
 

@@ -73,9 +73,7 @@ class SlimeyRouter:
         with self._lock:
             return self._uid_pins.get(uid)
 
-    def try_pin(
-        self, uid: str, provider: str, model: str, key_id: int
-    ) -> bool:
+    def try_pin(self, uid: str, provider: str, model: str, key_id: int) -> bool:
         """Try to pin a UID to a provider+model. Returns True if pinned."""
         with self._lock:
             if uid in self._uid_pins:
@@ -87,9 +85,7 @@ class SlimeyRouter:
                     return True
             return False  # all slots full
 
-    def record_ttft(
-        self, uid: str, provider: str, model: str, ttft_ms: float
-    ) -> None:
+    def record_ttft(self, uid: str, provider: str, model: str, ttft_ms: float) -> None:
         with self._lock:
             key = (uid, provider, model)
             hist = self._qos_history[key]
@@ -121,9 +117,7 @@ class SlimeyRouter:
                 _, _, _, slot_idx = self._uid_pins.pop(uid)
                 self._slots[slot_idx] = None
 
-    def is_qos_acceptable(
-        self, uid: str, provider: str, model: str
-    ) -> bool:
+    def is_qos_acceptable(self, uid: str, provider: str, model: str) -> bool:
         """Check if current QoS is within user's acceptable spectrum."""
         with self._lock:
             key = (uid, provider, model)

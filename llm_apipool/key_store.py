@@ -63,6 +63,7 @@ class AuditEntry(TypedDict, total=False):
     path: str
     client_ip: str
 
+
 from llm_apipool.core.encryption import (
     maybe_decrypt_key,
     maybe_encrypt_key,
@@ -1104,9 +1105,13 @@ class KeyStore:
         reliability_score: int | None = None,
     ) -> bool:
         """Update a key's scoring metrics. Returns True if updated."""
-        ALLOWED_COLUMNS: frozenset[str] = frozenset({
-            "accuracy_score", "speed_score", "reliability_score",
-        })
+        ALLOWED_COLUMNS: frozenset[str] = frozenset(
+            {
+                "accuracy_score",
+                "speed_score",
+                "reliability_score",
+            }
+        )
         updates: list[str] = []
         values: list[Any] = []
         col_map = {
@@ -1379,15 +1384,23 @@ class KeyStore:
         supports_vision: bool | None = None,
         supports_tools: bool | None = None,
     ) -> bool:
-        ALLOWED_COLUMNS: frozenset[str] = frozenset({
-            "context_window", "supports_vision", "supports_tools",
-        })
+        ALLOWED_COLUMNS: frozenset[str] = frozenset(
+            {
+                "context_window",
+                "supports_vision",
+                "supports_tools",
+            }
+        )
         updates: list[str] = []
         values: list[Any] = []
         col_map = {
             "context_window": context_window,
-            "supports_vision": supports_vision if supports_vision is None else (1 if supports_vision else 0),
-            "supports_tools": supports_tools if supports_tools is None else (1 if supports_tools else 0),
+            "supports_vision": supports_vision
+            if supports_vision is None
+            else (1 if supports_vision else 0),
+            "supports_tools": supports_tools
+            if supports_tools is None
+            else (1 if supports_tools else 0),
         }
         for col, val in col_map.items():
             if val is not None:

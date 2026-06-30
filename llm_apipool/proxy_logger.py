@@ -258,6 +258,3 @@ def _maybe_cleanup() -> None:
     hash_val = int(hashlib.sha256(today_str.encode()).hexdigest(), 16)
     if hash_val % 1000 == 0:
         _cleanup_old_logs()
-
-
-

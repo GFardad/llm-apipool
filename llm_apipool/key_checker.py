@@ -167,6 +167,22 @@ async def check_key_against_provider(
         text = result.text or "empty response"
         return provider, True, text[:80]
 
+    error_lower = result.error.lower() if result.error else ""
+    # Classify error for better user feedback during auto-detection.
+    if (
+        "401" in error_lower
+        or "unauthorized" in error_lower
+        or "invalid" in error_lower
+    ):
+        return provider, False, f"invalid key: {result.error[:80]}"
+    if "403" in error_lower:
+        return (
+            provider,
+            False,
+            f"access denied (key may be valid but model restricted): {result.error[:80]}",
+        )
+    if "429" in error_lower:
+        return provider, False, f"rate limited (key likely valid): {result.error[:80]}"
     return provider, False, result.error[:120]
 
 

@@ -15,7 +15,7 @@ graphify-out/
 .matrixx/
 
 # Database - contains registered API keys, never commit
-db/
+/db/
 *.db
 *.db-wal
 *.db-shm
@@ -60,3 +60,4 @@ env/
 
 # macOS
 .DS_Store
+test.txt

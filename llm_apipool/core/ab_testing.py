@@ -93,9 +93,7 @@ class ABTestManager:
 
     # ── Assignment ──────────────────────────────────────────────────────────
 
-    def get_assignment(
-        self, experiment_id: str, uid: str
-    ) -> str | None:
+    def get_assignment(self, experiment_id: str, uid: str) -> str | None:
         """Determine which model a UID should use for *experiment_id*.
 
         Returns ``"model_a"``, ``"model_b"``, or ``None`` when the
@@ -114,9 +112,7 @@ class ABTestManager:
 
     # ── Results (read from audit_log) ───────────────────────────────────────
 
-    def get_results(
-        self, experiment_id: str, store: Any
-    ) -> dict[str, Any]:
+    def get_results(self, experiment_id: str, store: Any) -> dict[str, Any]:
         """Compare metrics between model A and B for this experiment.
 
         Queries the audit log for entries matching each model and
@@ -183,9 +179,7 @@ class ABTestManager:
             "requests": {
                 "a": a_stats["requests"],
                 "b": b_stats["requests"],
-                "delta": _delta(
-                    float(a_stats["requests"]), float(b_stats["requests"])
-                ),
+                "delta": _delta(float(a_stats["requests"]), float(b_stats["requests"])),
             },
             "avg_latency_ms": {
                 "a": a_stats["avg_latency_ms"],

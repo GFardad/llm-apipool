@@ -37,9 +37,7 @@ def _create_logs_router(store: KeyStore) -> APIRouter:
                 content=output.getvalue(),
                 media_type="text/csv",
                 headers={
-                    "Content-Disposition": (
-                        f"attachment; filename=audit-{days}d.csv"
-                    )
+                    "Content-Disposition": (f"attachment; filename=audit-{days}d.csv")
                 },
             )
 
@@ -48,9 +46,7 @@ def _create_logs_router(store: KeyStore) -> APIRouter:
                 content=_json.dumps(entries, indent=2, default=str),
                 media_type="application/json",
                 headers={
-                    "Content-Disposition": (
-                        f"attachment; filename=audit-{days}d.json"
-                    )
+                    "Content-Disposition": (f"attachment; filename=audit-{days}d.json")
                 },
             )
 
@@ -60,9 +56,7 @@ def _create_logs_router(store: KeyStore) -> APIRouter:
             content=lines,
             media_type="application/x-ndjson",
             headers={
-                "Content-Disposition": (
-                    f"attachment; filename=audit-{days}d.jsonl"
-                )
+                "Content-Disposition": (f"attachment; filename=audit-{days}d.jsonl")
             },
         )
 

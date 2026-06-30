@@ -514,19 +514,14 @@ class Rotator:
                             k["id"] == pinned_key_id
                             and k["provider"] == pinned_provider
                         ):
-                            if sr.is_qos_acceptable(
-                                uid, pinned_provider, pinned_model
-                            ):
+                            if sr.is_qos_acceptable(uid, pinned_provider, pinned_model):
                                 cfg = self.configs.get(k["provider"], {})
                                 try:
-                                    extra = json.loads(
-                                        k["extra_params"] or "{}"
-                                    )
+                                    extra = json.loads(k["extra_params"] or "{}")
                                 except json.JSONDecodeError:
                                     extra = {}
-                                raw_base_url = (
-                                    k.get("base_url_override")
-                                    or cfg.get("base_url", "")
+                                raw_base_url = k.get("base_url_override") or cfg.get(
+                                    "base_url", ""
                                 )
                                 base_url = raw_base_url
                                 if "{account_id}" in base_url:
@@ -540,9 +535,7 @@ class Rotator:
                                     "base_url": base_url,
                                     "model": k["model"]
                                     or _resolve_model(cfg, cap_scope),
-                                    "capabilities": self.store.parse_capabilities(
-                                        k
-                                    ),
+                                    "capabilities": self.store.parse_capabilities(k),
                                     "cap_key": cap_scope,
                                     "subscriber_id": subscriber_id,
                                     "openai_compatible": cfg.get(
@@ -557,9 +550,7 @@ class Rotator:
                                 }
                             # QoS unacceptable — unpin so next request
                             # falls through to normal routing.
-                            sr.record_error(
-                                uid, pinned_provider, pinned_model
-                            )
+                            sr.record_error(uid, pinned_provider, pinned_model)
                             break
 
         active_map = {k["id"]: k for k in active}

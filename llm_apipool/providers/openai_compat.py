@@ -12,6 +12,11 @@ from typing import Any
 import httpx
 from openai import APIStatusError, APIConnectionError, AsyncOpenAI, RateLimitError
 
+from ._stream_utils import (
+    _normalize_delta_content,
+    build_chunk,
+    make_chunk_id,
+)
 from .base import CompletionResult
 from .headers import collect_rl_headers, extract_remaining_requests
 
@@ -149,43 +154,75 @@ def _strip_thinking(text: str) -> str:
     return text.strip()
 
 
-def _make_chunk_id() -> str:
-    return f"chatcmpl-{uuid.uuid4().hex[:12]}"
+# ── Gemini vendor extension stripping ──
+
+_VENDOR_EXT_PREFIXES = ("x-", "x_")
 
 
-def _build_chunk(
-    chunk_id: str,
-    created: int,
-    model: str,
-    delta_content: str | None = None,
-    delta_role: str | None = None,
-    finish_reason: str | None = None,
-    index: int = 0,
-    **extra: Any,  # noqa: ANN401
+def _strip_vendor_extensions(
+    schema: dict[str, Any],
+    _is_properties: bool = False,
 ) -> dict[str, Any]:
-    """Build an OpenAI-format streaming chunk dict."""
-    chunk: dict[str, Any] = {
-        "id": chunk_id,
-        "object": "chat.completion.chunk",
-        "created": created,
-        "model": model,
-        "choices": [],
-    }
-    if delta_content is not None or delta_role is not None or finish_reason is not None:
-        delta: dict[str, Any] = {}
-        if delta_role is not None:
-            delta["role"] = delta_role
-        if delta_content is not None:
-            delta["content"] = delta_content
-        chunk["choices"] = [
-            {
-                "index": index,
-                "delta": delta,
-                "finish_reason": finish_reason,
-            },
-        ]
-    chunk.update(extra)
-    return chunk
+    """Recursively remove vendor extension keys (``x-*`` / ``x_*``) from a
+    JSON Schema dict so Gemini does not reject them with ``Unknown name``.
+
+    Preserves property **values** whose names happen to start with ``x-``
+    (e.g. ``properties["x-user-id"]``) — those are legitimate field
+    identifiers, not vendor extensions.
+
+    The Gemini API rejects any schema carrying an ``x-`` vendor extension
+    (e.g. ``x-google-enum-descriptions``) with ``400 Unknown name``.
+    """
+    if not isinstance(schema, dict):
+        return schema
+
+    cleaned: dict[str, Any] = {}
+    for key, value in schema.items():
+        if not _is_properties:
+            if isinstance(key, str) and key.lower().startswith(_VENDOR_EXT_PREFIXES):
+                continue
+        if isinstance(value, dict):
+            # When we enter a ``properties`` block the keys are field
+            # names — preserve them all.  The *values* of those keys are
+            # sub-schemas and get normal treatment.
+            cleaned[key] = _strip_vendor_extensions(
+                value, _is_properties=(key == "properties")
+            )
+        elif isinstance(value, list):
+            cleaned[key] = [
+                _strip_vendor_extensions(item, _is_properties=False)
+                if isinstance(item, dict)
+                else item
+                for item in value
+            ]
+        else:
+            cleaned[key] = value
+    return cleaned
+
+
+def _sanitize_tools_for_provider(
+    tools: list[dict[str, Any]], provider: str
+) -> list[dict[str, Any]]:
+    """Apply per-provider sanitization to tool definitions.
+
+    Currently only strips vendor extensions for Google/Gemini.
+    """
+    if provider not in ("google",):
+        return tools
+
+    sanitized: list[dict[str, Any]] = []
+    for tool in tools:
+        if not isinstance(tool, dict):
+            sanitized.append(tool)
+            continue
+        func = tool.get("function")
+        if isinstance(func, dict):
+            params = func.get("parameters")
+            if isinstance(params, dict):
+                func = {**func, "parameters": _strip_vendor_extensions(params)}
+            tool = {**tool, "function": func}
+        sanitized.append(tool)
+    return sanitized
 
 
 def _build_error_chunk(
@@ -195,10 +232,11 @@ def _build_error_chunk(
     error: str,
     was_429: bool = False,
 ) -> dict[str, Any]:
-    return _build_chunk(
+    return build_chunk(
         chunk_id,
         created,
         model,
+        finish_reason="stop",
         x_error=error,
         x_was_429=was_429,
     )
@@ -216,7 +254,7 @@ def _make_stream_gen(
     **kwargs: Any,  # noqa: ANN401
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Return an async generator that yields OpenAI-format streaming chunks."""
-    chunk_id = _make_chunk_id()
+    chunk_id = make_chunk_id()
     created = int(time.time())
 
     async def _gen() -> AsyncGenerator[dict[str, Any], None]:
@@ -243,9 +281,11 @@ def _make_stream_gen(
                         if delta.role is not None:
                             delta_out["role"] = delta.role
 
-                        has_real_content = delta.content is not None
+                        raw_content = delta.content
+                        normalized_content = _normalize_delta_content(raw_content)
+                        has_real_content = normalized_content is not None
                         if has_real_content:
-                            delta_out["content"] = delta.content
+                            delta_out["content"] = normalized_content
 
                         # reasoning_content — Z.ai/OpenCode Zen/Cloudflare
                         # reasoning         — Ollama
@@ -396,21 +436,25 @@ async def complete(
     """
     strip_thinking = kwargs.pop("strip_thinking", True)
     model = kwargs.pop("model", None) or key_data["model"]
+    provider = key_data.get("provider", "")
+
+    # Sanitize tool schemas for provider-specific requirements (Gemini x-* keys).
+    tools = kwargs.get("tools")
+    if tools is not None:
+        kwargs["tools"] = _sanitize_tools_for_provider(tools, provider)
 
     if stream:
         return _make_stream_gen(
             key_data,
             messages,
             model,
-            provider=key_data.get("provider", ""),
+            provider=provider,
             api_key=key_data["api_key"] or "empty-key-placeholder",
             base_url=key_data["base_url"],
             strip_thinking=strip_thinking,
             no_auth=key_data.get("no_auth", False),
             **kwargs,
         )
-
-    provider = key_data.get("provider", "")
     api_key = key_data["api_key"] or "empty-key-placeholder"
     base_url = key_data["base_url"]
     no_auth = key_data.get("no_auth", False)

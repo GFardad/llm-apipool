@@ -19,6 +19,22 @@ class CompletionResult:
     rate_limit_headers: dict[str, Any] = field(default_factory=dict)
     reasoning_content: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
+    terminal_error_type: str | None = None
+    """Classifies the terminal failure when all keys exhausted.
+
+    ``"request_shape"`` — every candidate failed on HTTP 400
+    (invalid request, schema reject, tool-call failure).  The client
+    should receive ``400 invalid_request_error``, not a 429.
+
+    ``"rate_limit"`` — every candidate hit a rate limit (429).
+    Normal ``429 rate_limit_error`` response.
+
+    ``"transient"`` — mixed or non-429/non-400 failures (5xx,
+    network, timeout).  Current 503/502 behaviour unchanged.
+
+    ``None`` — no exhaustion occurred (the call succeeded or no
+    attempt was made).
+    """
 
 
 @dataclass

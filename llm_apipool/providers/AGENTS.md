@@ -14,9 +14,11 @@ providers/
 ├── dispatch.py          # Retry loop, streaming path, token estimation
 ├── headers.py           # Rate-limit header extraction and cooldown parsing
 ├── openai_compat.py     # AsyncOpenAI client, think-token strip
+├── _stream_utils.py     # Shared SSE chunk builders (make_chunk_id, build_chunk)
 ├── cloudflare.py        # Cloudflare Workers AI native REST
 ├── cohere.py            # Cohere native API
-└── *.bak                # Local backup files; do not merge/delete without instruction
+├── registry.py           # Provider adapter registry (auto-discovers adapters/)
+└── *.bak                 # Local backup files; do not merge/delete without instruction
 ```
 
 ## WHERE TO LOOK

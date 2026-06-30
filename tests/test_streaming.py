@@ -14,6 +14,7 @@ import httpx
 import pytest
 
 from llm_apipool.providers import openai_compat as oc
+from llm_apipool.providers._stream_utils import build_chunk, make_chunk_id
 from llm_apipool.providers.base import CompletionResult
 
 
@@ -147,11 +148,11 @@ class TestOpenaiCompatMakeChunkId:
     """_make_chunk_id — unique chunk ID generation."""
 
     def test_returns_chatcmpl_prefix(self):
-        chunk_id = oc._make_chunk_id()
+        chunk_id = make_chunk_id()
         assert chunk_id.startswith("chatcmpl-")
 
     def test_unique_ids(self):
-        ids = {oc._make_chunk_id() for _ in range(100)}
+        ids = {make_chunk_id() for _ in range(100)}
         assert len(ids) == 100
 
 
@@ -220,7 +221,7 @@ class TestOpenaiCompatBuildChunk:
     MODEL = "test-model"
 
     def test_delta_content_only(self):
-        chunk = oc._build_chunk(
+        chunk = build_chunk(
             self.CHUNK_ID,
             self.CREATED,
             self.MODEL,
@@ -235,7 +236,7 @@ class TestOpenaiCompatBuildChunk:
         assert chunk["choices"][0]["finish_reason"] is None
 
     def test_delta_role_only(self):
-        chunk = oc._build_chunk(
+        chunk = build_chunk(
             self.CHUNK_ID,
             self.CREATED,
             self.MODEL,
@@ -244,7 +245,7 @@ class TestOpenaiCompatBuildChunk:
         assert chunk["choices"][0]["delta"] == {"role": "assistant"}
 
     def test_finish_reason_only(self):
-        chunk = oc._build_chunk(
+        chunk = build_chunk(
             self.CHUNK_ID,
             self.CREATED,
             self.MODEL,
@@ -254,7 +255,7 @@ class TestOpenaiCompatBuildChunk:
         assert chunk["choices"][0]["delta"] == {}
 
     def test_all_params(self):
-        chunk = oc._build_chunk(
+        chunk = build_chunk(
             self.CHUNK_ID,
             self.CREATED,
             self.MODEL,
@@ -272,7 +273,7 @@ class TestOpenaiCompatBuildChunk:
         assert chunk["choices"][0]["finish_reason"] == "stop"
 
     def test_extra_kwargs(self):
-        chunk = oc._build_chunk(
+        chunk = build_chunk(
             self.CHUNK_ID,
             self.CREATED,
             self.MODEL,
@@ -284,7 +285,7 @@ class TestOpenaiCompatBuildChunk:
 
     def test_all_none_optionals(self):
         """When all optional params are None, choices is empty list."""
-        chunk = oc._build_chunk(
+        chunk = build_chunk(
             self.CHUNK_ID,
             self.CREATED,
             self.MODEL,
@@ -293,7 +294,7 @@ class TestOpenaiCompatBuildChunk:
 
     def test_delta_content_empty_string(self):
         """Empty string content is still included."""
-        chunk = oc._build_chunk(
+        chunk = build_chunk(
             self.CHUNK_ID,
             self.CREATED,
             self.MODEL,
@@ -1111,23 +1112,19 @@ class TestDispatchEstimateTokensFallback:
 
 
 # ---------------------------------------------------------------------------
-# dispatch._make_chunk_id
+# make_chunk_id
 # ---------------------------------------------------------------------------
 
 
-class TestDispatchMakeChunkId:
-    """dispatch._make_chunk_id — unique chunk ID generation."""
+class TestMakeChunkId:
+    """make_chunk_id — unique chunk ID generation."""
 
     def test_returns_chatcmpl_prefix(self):
-        from llm_apipool.providers.dispatch import _make_chunk_id
-
-        chunk_id = _make_chunk_id()
+        chunk_id = make_chunk_id()
         assert chunk_id.startswith("chatcmpl-")
 
     def test_unique_ids(self):
-        from llm_apipool.providers.dispatch import _make_chunk_id
-
-        ids = {_make_chunk_id() for _ in range(100)}
+        ids = {make_chunk_id() for _ in range(100)}
         assert len(ids) == 100
 
 
