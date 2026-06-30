@@ -13,6 +13,19 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 
+# CSP: The React SPA uses Tailwind utility classes and inline style={{}} for
+# dynamic values (sparklines, progress bars, chart dimensions), so 'unsafe-inline'
+# is required for style-src.  Scripts are bundled; no inline scripts needed.
+_CSP = (
+    "default-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "font-src 'self' data:; "
+    "connect-src 'self' ws: wss:; "
+    "frame-ancestors 'none'"
+)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to every response."""
 
@@ -20,7 +33,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response: Response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Content-Security-Policy"] = "default-src 'self'"
+        response.headers["Content-Security-Policy"] = _CSP
         response.headers["Strict-Transport-Security"] = (
             "max-age=31536000; includeSubDomains"
         )

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 
-import contextlib
 import json
 import logging
 import os
@@ -442,10 +441,14 @@ class KeyStore:
                 try:
                     conn.execute(migration)
                 except sqlite3.OperationalError as e:
-                    logger.debug("Migration skipped (already applied): %s", e)
+                    logger.warning("Migration may have failed: %s", e)
             for index in INDEXES:
-                with contextlib.suppress(sqlite3.OperationalError):
+                # Index creation may fail silently on re-init if the
+                # index already exists — log at debug to avoid noise.
+                try:
                     conn.execute(index)
+                except sqlite3.OperationalError as e:
+                    logger.debug("Index may already exist: %s", e)
 
     # --- capability helpers ---
 

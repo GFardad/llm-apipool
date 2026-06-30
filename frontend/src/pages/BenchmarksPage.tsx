@@ -391,7 +391,7 @@ export function BenchmarksPage() {
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
-                  className="w-full h-[80px] rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50"
+                  className="w-full h-[80px] rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary placeholder:text-muted-foreground/50"
                   placeholder="Enter your test prompt…"
                   disabled={running}
                 />
@@ -405,7 +405,7 @@ export function BenchmarksPage() {
                     type="text"
                     value={modelOverride}
                     onChange={(e) => setModelOverride(e.target.value)}
-                    className="w-full h-8 rounded-lg border border-border bg-background px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary placeholder:text-muted-foreground/50"
+                    className="w-full h-8 rounded-lg border border-border bg-background px-2.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary placeholder:text-muted-foreground/50"
                     placeholder="e.g. llama-3.3-70b-versatile"
                     disabled={running}
                   />

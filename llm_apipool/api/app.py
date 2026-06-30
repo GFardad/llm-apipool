@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 import json
+import mimetypes
 import os
 from pathlib import Path
 from typing import Any
@@ -140,7 +141,7 @@ def make_app(
             await asyncio.gather(*_background_tasks, return_exceptions=True)
         _background_tasks.clear()
 
-    app = FastAPI(title="llm-apipool proxy", version="2.1", lifespan=_lifespan)
+    app = FastAPI(title="llm-apipool proxy", version="1.0.0", lifespan=_lifespan)
 
     # Compose all route modules
     app.include_router(_create_anthropic_router(store, rotator, configs, capabilities))
@@ -172,41 +173,44 @@ def make_app(
     web_index = web_dist / "index.html"
 
     if web_index.exists():
-        index_html = web_index.read_text()
         from fastapi.responses import Response
+
+        def _read_index() -> bytes:
+            """Read index.html from disk on every call so asset hashes are
+            always fresh after a rebuild — no server restart required."""
+            try:
+                return web_index.read_bytes()
+            except OSError:
+                return b"<html><body><p>App not built</p></body></html>"
 
         @app.get("/{path:path}")
         async def _spa_fallback(request: Request, path: str) -> Response:
-            # Check if file exists in web_dist (for assets)
             file_path = web_dist / path
             if file_path.exists() and file_path.is_file():
                 content = file_path.read_bytes()
-                # Determine content type
-                if path.endswith(".js"):
-                    return Response(content, media_type="application/javascript")
-                elif path.endswith(".css"):
-                    return Response(content, media_type="text/css")
-                elif path.endswith(".html"):
-                    return Response(content, media_type="text/html")
-                else:
-                    return Response(content)
-            # Check for asset paths that don't exist — return 404 instead of
-            # serving index.html, which would cause MIME-type errors for stale
-            # cached index.html files (hash mismatch after rebuild).
-            if (
-                path.startswith("assets/")
-                or path.endswith(".js")
-                or path.endswith(".css")
+                mime_type, _ = mimetypes.guess_type(str(file_path))
+                return Response(
+                    content, media_type=mime_type or "application/octet-stream"
+                )
+
+            # Return 404 for missing assets (e.g. stale cached index.html with
+            # old hash filenames after a rebuild).  Must set media_type so the
+            # browser doesn't choke on empty Content-Type + nosniff.
+            if path.startswith("assets/") or path.endswith(
+                (".js", ".css", ".woff", ".woff2")
             ):
                 return Response(
-                    b"",
+                    b'{"error":"not_found"}',
                     status_code=404,
+                    media_type="application/json",
                     headers={"Cache-Control": "no-store"},
                 )
-            # SPA fallback: index.html must NOT be cached so the browser always
-            # fetches the latest version with correct asset hashes.
+
+            # SPA fallback: read fresh from disk so rebuilt asset hashes
+            # are always served — no server restart needed.
+            html = _read_index()
             return Response(
-                index_html.encode(),
+                html,
                 media_type="text/html",
                 headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
             )
@@ -214,8 +218,9 @@ def make_app(
         # Also serve root explicitly
         @app.get("/")
         async def _root() -> Response:
+            html = _read_index()
             return Response(
-                index_html.encode(),
+                html,
                 media_type="text/html",
                 headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
             )
@@ -225,7 +230,7 @@ def make_app(
         async def _root_fallback() -> dict[str, Any]:
             return {
                 "name": "llm-apipool",
-                "version": "2.1",
+                "version": "1.0.0",
                 "note": "Frontend not built — run `cd frontend && npm run build`",
             }
 

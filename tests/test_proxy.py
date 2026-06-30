@@ -83,7 +83,7 @@ class TestMakeApp:
         monkeypatch.setenv("LLM_APIPOOL_DB", str(db_path))
         app = make_app()
         assert app.title == "llm-apipool proxy"
-        assert app.version == "2.1"
+        assert app.version == "1.0.0"
 
     def test_health_endpoint(self, db_path: Path, monkeypatch: pytest.MonkeyPatch):
         """GET /health returns status ok with key counts."""

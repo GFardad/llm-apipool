@@ -57,10 +57,7 @@ def get_key_health_summary(store: KeyStore) -> dict[str, Any]:
     active = sum(1 for k in keys if k["is_active"])
     now_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
     cooled = sum(
-        1
-        for k in keys
-        if k.get("cooldown_until")
-        and k["cooldown_until"] > now_str
+        1 for k in keys if k.get("cooldown_until") and k["cooldown_until"] > now_str
     )
     return {
         "total": total,

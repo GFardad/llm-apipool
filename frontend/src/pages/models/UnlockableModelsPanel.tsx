@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +28,7 @@ const TIER_COLORS: Record<number, string> = {
 }
 
 export function UnlockableModelsPanel() {
+  const navigate = useNavigate()
   const { data: groups, isLoading } = useQuery<UnlockableGroup[]>({
     queryKey: ['unlockable-models'],
     queryFn: () => apiFetch('/api/models/unlockable'),
@@ -77,7 +79,7 @@ export function UnlockableModelsPanel() {
             <div className="flex items-center gap-1">
               <HelpNode content={HELP.unlockableModels} side="left" />
               <button
-                onClick={() => window.location.href = `/keys?provider=${g.provider}`}
+                onClick={() => navigate(`/keys?provider=${g.provider}`)}
                 className="text-[11px] text-primary hover:text-primary/80 transition-colors font-medium"
               >
                 Add key →
