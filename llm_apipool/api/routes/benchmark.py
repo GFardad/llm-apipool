@@ -15,7 +15,9 @@ from llm_apipool.providers.dispatch import call_complete
 
 def _load_provider_configs() -> dict[str, Any]:
     """Load provider definitions from the config file."""
-    config_path = Path(__file__).resolve().parent.parent.parent / "config" / "providers.json"
+    config_path = (
+        Path(__file__).resolve().parent.parent.parent / "config" / "providers.json"
+    )
     with config_path.open() as f:
         return json.load(f)["providers"]
 

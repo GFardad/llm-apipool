@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from threading import RLock
 from typing import Any
@@ -64,6 +65,78 @@ _ACQUIRE_TIMEOUT = 3.0
 
 _MAX_RECENT_FAILURES = 10
 """Cap for consecutive-failure penalty in health scoring."""
+
+# ── Outbound proxy support ───────────────────────────────────────────────────
+
+_PROXY_ENV_VARS = (
+    "ALL_PROXY",
+    "all_proxy",
+    "HTTPS_PROXY",
+    "https_proxy",
+    "HTTP_PROXY",
+    "http_proxy",
+)
+"""Environment variables checked for proxy configuration, in priority order."""
+
+_PROXY_BYPASS_ENV = ("NO_PROXY", "no_proxy")
+"""Comma-separated host suffixes to bypass the proxy."""
+
+
+def _resolve_proxy_url() -> str | None:
+    """Read the outbound proxy URL from the environment.
+
+    Checks ``ALL_PROXY``, ``HTTPS_PROXY``, ``HTTP_PROXY`` (and their
+    lower-case variants) in priority order.  Returns ``None`` when no
+    proxy is configured.
+    """
+    for var in _PROXY_ENV_VARS:
+        value = os.environ.get(var, "").strip()
+        if value:
+            return value
+    return None
+
+
+def _get_proxy_bypass_set() -> set[str]:
+    """Return the set of host suffixes that should bypass the proxy."""
+    bypass: set[str] = set()
+    for var in _PROXY_BYPASS_ENV:
+        raw = os.environ.get(var, "").strip()
+        if raw:
+            for part in raw.split(","):
+                part = part.strip().lower()
+                if part:
+                    bypass.add(part)
+    return bypass
+
+
+def _should_bypass_proxy(base_url: str, bypass_set: set[str]) -> bool:
+    """Check whether *base_url* should bypass the configured proxy.
+
+    Extracts the hostname part from *base_url* before matching against
+    *bypass_set* entries, so ``http://localhost:8080`` correctly matches
+    the bypass entry ``localhost``.
+
+    Matching is case-insensitive: entries in *bypass_set* may be any
+    case (they are lowered internally).  Suffix entries starting with
+    ``.`` (e.g. ``.internal``) match any hostname ending with that
+    suffix (``service.internal`` → match).
+    """
+    if not bypass_set:
+        return False
+    host = base_url.lower()
+    # Strip scheme and path to get just hostname[:port]
+    if "://" in host:
+        host = host.split("://", 1)[1]
+    host = host.split("/")[0]
+    # Strip port for matching
+    hostname = host.split(":")[0] if ":" in host else host
+    for suffix in bypass_set:
+        suffix_lower = suffix.lower()
+        if hostname == suffix_lower:
+            return True
+        if suffix_lower.startswith(".") and hostname.endswith(suffix_lower):
+            return True
+    return False
 
 
 # ── No-auth helper (mirrors openai_compat._NoAuth) ───────────────────────────
@@ -308,6 +381,20 @@ class ProviderConnectionPool:
 
     # ── HTTP client lifecycle ────────────────────────────────────────────
 
+    def _resolve_proxy_for(self, base_url: str) -> str | None:
+        """Return the proxy URL for *base_url*, or ``None`` to connect directly.
+
+        Respects the ``NO_PROXY`` / ``no_proxy`` bypass list.  When the
+        provider endpoint matches a bypass suffix no proxy is used.
+        """
+        bypass = getattr(self, "_proxy_bypass", None)
+        if bypass is None:
+            bypass = _get_proxy_bypass_set()
+            self._proxy_bypass = bypass
+        if _should_bypass_proxy(base_url, bypass):
+            return None
+        return _resolve_proxy_url()
+
     async def _create_http_client(
         self, base_url: str, stream: bool = False
     ) -> httpx.AsyncClient:
@@ -316,9 +403,18 @@ class ProviderConnectionPool:
         The client carries **no auth** — authentication is handled by the
         ``AsyncOpenAI`` wrapper so the same HTTP client can be shared across
         different API keys for the same provider.
+
+        If an outbound proxy is configured (via ``HTTP_PROXY`` /
+        ``HTTPS_PROXY`` / ``ALL_PROXY`` env vars) the client is created
+        with that proxy, unless the provider's ``base_url`` matches the
+        ``NO_PROXY`` bypass list.
         """
         timeout = _AGGRESSIVE_TIMEOUT_STREAM if stream else _AGGRESSIVE_TIMEOUT
-        client = httpx.AsyncClient(timeout=timeout)
+        proxy_url = self._resolve_proxy_for(base_url)
+        if proxy_url:
+            client = httpx.AsyncClient(proxies=proxy_url, timeout=timeout)  # type: ignore[call-arg]
+        else:
+            client = httpx.AsyncClient(timeout=timeout)
         self._get_health(base_url).record_connect()
         return client
 

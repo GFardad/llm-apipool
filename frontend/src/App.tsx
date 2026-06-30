@@ -5,6 +5,7 @@ import { LogsPage } from '@/pages/LogsPage'
 import { ModelsPage } from '@/pages/ModelsPage'
 import { AnalyticsPage } from '@/pages/AnalyticsPage'
 import { BenchmarksPage } from '@/pages/BenchmarksPage'
+import { PlaygroundPage } from '@/pages/PlaygroundPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useEffect } from 'react'
@@ -90,6 +91,16 @@ export default function App() {
                 <PageShell>
                   <ErrorBoundary>
                     <BenchmarksPage />
+                  </ErrorBoundary>
+                </PageShell>
+              }
+            />
+            <Route
+              path="/playground"
+              element={
+                <PageShell>
+                  <ErrorBoundary>
+                    <PlaygroundPage />
                   </ErrorBoundary>
                 </PageShell>
               }

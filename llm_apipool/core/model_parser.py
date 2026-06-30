@@ -7,7 +7,6 @@ import re
 from dataclasses import dataclass
 
 
-
 @dataclass
 class ModelFilter:
     """Filter criteria extracted from model string."""

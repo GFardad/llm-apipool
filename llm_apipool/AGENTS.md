@@ -1,7 +1,7 @@
 # llm_apipool Core Package
 
-**Generated:** 2026-06-26 22:55:00
-**Commit:** bbf48fa
+**Generated:** 2026-06-29 18:30:00
+**Commit:** 0bdbb17
 
 ## OVERVIEW
 Core package: Typer CLI, SQLite key store, tiered rotator, FastAPI proxy (with modular routes), Textual TUI, LangChain wrapper, provider dispatch, connection-pooled OpenAI clients.
@@ -107,6 +107,10 @@ llm_apipool/
 - `llm-apipool` → `__main__.py:main()` → `cli.app()`
 - `python -m llm_apipool` → same
 - `llm_apipool.AggregatorChat` → LangChain wrapper around `providers.dispatch.complete()`
+
+## SUB-AGENTS
+- **[`core/AGENTS.md`](core/AGENTS.md)** — 34 routing/intelligence modules (affinity, effort, health scoring, A/B testing, prompt caching, connection pool, fallback modes, encryption, group routing)
+- **[`api/AGENTS.md`](api/AGENTS.md)** — FastAPI app builder + 17 route files + auth/rate-limit/CORS middleware + Anthropic bridge
 
 ## GOTCHAS
 - `cap_key` = JSON-sorted capabilities joined by `,` (e.g., `general_purpose,fast`).

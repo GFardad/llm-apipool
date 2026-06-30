@@ -161,6 +161,32 @@ export function AnalyticsPage() {
 
   const isLoading = statsLoading && !stats
 
+  if (isLoading) {
+    return (
+      <div>
+        <PageHeader title="Analytics" description="Key pool health and provider performance" />
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-3xl border border-border p-5 space-y-3">
+                <div className="skeleton h-3 w-24" />
+                <div className="skeleton h-8 w-16" />
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="rounded-xl border border-border p-4 space-y-2">
+                <div className="skeleton h-3 w-20" />
+                <div className="skeleton h-6 w-12" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
       <PageHeader title="Analytics" description="Key pool health and provider performance" />
@@ -189,7 +215,7 @@ export function AnalyticsPage() {
       {tab === 'overview' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card>
+            <Card className="card-hover-brand">
               <CardContent className="p-5">
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-2">
                   <KeyRound className="size-3.5" /> Total Keys <HelpNode content={HELP.overviewKeys} side="top" />
@@ -197,7 +223,7 @@ export function AnalyticsPage() {
                 <div className="text-3xl font-bold text-foreground">{overview?.total_keys ?? 0}</div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="card-hover-brand">
               <CardContent className="p-5">
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-2">
                   <Activity className="size-3.5" /> Active Keys <HelpNode content={HELP.overviewKeys} side="top" />
@@ -205,7 +231,7 @@ export function AnalyticsPage() {
                 <div className="text-3xl font-bold text-emerald-500">{overview?.active_keys ?? 0}</div>
               </CardContent>
             </Card>
-            <Card>
+            <Card className="card-hover-brand">
               <CardContent className="p-5">
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-2">
                   <BarChart3 className="size-3.5" /> Days Analyzed <HelpNode content={HELP.overviewKeys} side="top" />
@@ -217,7 +243,7 @@ export function AnalyticsPage() {
 
           {stats && (
             <>
-              <h2 className="text-sm font-medium flex items-center gap-2">
+              <h2 className="text-sm font-medium flex items-center gap-2 text-balance">
                 <Gauge className="size-4" /> Live Performance <HelpNode content={HELP.overviewPerformance} side="top" />
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -236,7 +262,7 @@ export function AnalyticsPage() {
 
           {stats && Object.keys(stats.providers).length > 0 && (
             <div>
-              <h2 className="text-sm font-medium mb-3">Provider Traffic <HelpNode content={HELP.providerTraffic} side="top" /></h2>
+              <h2 className="text-sm font-medium mb-3 text-balance">Provider Traffic <HelpNode content={HELP.providerTraffic} side="top" /></h2>
               <div className="rounded-lg border border-border overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -266,7 +292,7 @@ export function AnalyticsPage() {
 
           {stats && Object.keys(stats.providers).length > 0 && (
             <div>
-              <h2 className="text-sm font-medium mb-3">Per-Model Latency <HelpNode content={HELP.modelLatency} side="top" /></h2>
+              <h2 className="text-sm font-medium mb-3 text-balance">Per-Model Latency <HelpNode content={HELP.modelLatency} side="top" /></h2>
               <div className="rounded-lg border border-border overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -471,7 +497,7 @@ export function AnalyticsPage() {
 
           <Card>
             <CardContent className="p-5">
-              <h3 className="text-sm font-medium mb-4">Latency Trend</h3>
+              <h3 className="text-sm font-medium mb-4 text-balance">Latency Trend</h3>
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={usageData?.buckets ?? []}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -479,7 +505,7 @@ export function AnalyticsPage() {
                   <YAxis tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))" />
                   <Tooltip contentStyle={tooltipStyle} />
                   <Line type="monotone" dataKey="avg_latency_ms" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Avg Latency (ms)" />
-                  <Line type="monotone" dataKey="p95_latency_ms" stroke="hsl(215 90% 50%)" strokeWidth={1.5} dot={false} strokeDasharray="4 4" name="P95 Latency (ms)" />
+                  <Line type="monotone" dataKey="p95_latency_ms" stroke="hsl(var(--accent))" strokeWidth={1.5} dot={false} strokeDasharray="4 4" name="P95 Latency (ms)" />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -487,7 +513,7 @@ export function AnalyticsPage() {
 
           <Card>
             <CardContent className="p-5">
-              <h3 className="text-sm font-medium mb-4">Error Rate</h3>
+              <h3 className="text-sm font-medium mb-4 text-balance">Error Rate</h3>
               <ResponsiveContainer width="100%" height={280}>
                 <AreaChart data={usageData?.buckets ?? []}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -502,7 +528,7 @@ export function AnalyticsPage() {
 
           <Card>
             <CardContent className="p-5">
-              <h3 className="text-sm font-medium mb-4">Token Usage</h3>
+              <h3 className="text-sm font-medium mb-4 text-balance">Token Usage</h3>
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={usageData?.buckets ?? []}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -510,7 +536,7 @@ export function AnalyticsPage() {
                   <YAxis tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))" />
                   <Tooltip contentStyle={tooltipStyle} />
                   <Bar dataKey="tokens_in" stackId="tokens" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} name="Tokens In" />
-                  <Bar dataKey="tokens_out" stackId="tokens" fill="hsl(215 90% 50%)" radius={[2, 2, 0, 0]} name="Tokens Out" />
+                  <Bar dataKey="tokens_out" stackId="tokens" fill="hsl(var(--accent))" radius={[2, 2, 0, 0]} name="Tokens Out" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>

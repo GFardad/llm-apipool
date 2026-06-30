@@ -10,6 +10,7 @@ import pytest
 from llm_apipool.providers import cloudflare as _cloudflare
 from llm_apipool.providers import cohere as _cohere
 from llm_apipool.providers import openai_compat
+from llm_apipool.providers._stream_utils import build_chunk, make_chunk_id
 from llm_apipool.providers.base import CompletionResult
 from llm_apipool.providers.dispatch import _estimate_tokens, _mask_key
 
@@ -84,12 +85,17 @@ class TestEstimateTokens:
         from unittest import mock
         import tiktoken
         import llm_apipool.providers.dispatch as dispatch_mod
+
         # Mock tiktoken.get_encoding to raise so the fallback path runs
         monkeypatch.setattr(
-            tiktoken, "encoding_for_model", mock.Mock(side_effect=Exception("tiktoken failed"))
+            tiktoken,
+            "encoding_for_model",
+            mock.Mock(side_effect=Exception("tiktoken failed")),
         )
         monkeypatch.setattr(
-            tiktoken, "get_encoding", mock.Mock(side_effect=Exception("tiktoken failed"))
+            tiktoken,
+            "get_encoding",
+            mock.Mock(side_effect=Exception("tiktoken failed")),
         )
         # Clear any cached encoding
         dispatch_mod._encoding_cache = {}
@@ -586,27 +592,25 @@ class TestCohere:
 
     @pytest.mark.asyncio
     async def test_cohere_build_chunk_variants(self):
-        """Direct tests for cohere _build_chunk helper."""
-        chunk = _cohere._build_chunk("cid1", 100, "m1")
+        """Direct tests for shared build_chunk helper."""
+        chunk = build_chunk("cid1", 100, "m1")
         assert chunk["id"] == "cid1"
         assert chunk["choices"] == []
 
-        chunk2 = _cohere._build_chunk(
+        chunk2 = build_chunk(
             "cid2", 200, "m2", delta_content="hi", delta_role="assistant"
         )
         assert chunk2["choices"][0]["delta"] == {"role": "assistant", "content": "hi"}
 
-        chunk3 = _cohere._build_chunk(
-            "cid3", 300, "m3", finish_reason="stop", x_tokens=99
-        )
+        chunk3 = build_chunk("cid3", 300, "m3", finish_reason="stop", x_tokens=99)
         assert chunk3["choices"][0]["finish_reason"] == "stop"
         assert chunk3["x_tokens"] == 99
 
     @pytest.mark.asyncio
     async def test_cohere_make_chunk_id(self):
-        """cohere _make_chunk_id returns unique IDs with correct prefix."""
-        cid = _cohere._make_chunk_id()
+        cid = make_chunk_id()
         assert cid.startswith("chatcmpl-")
+        assert len(cid) == 21
 
 
 # ---------------------------------------------------------------------------
@@ -865,28 +869,24 @@ class TestCloudflare:
     async def test_build_chunk_variants(self):
         """Direct tests for _build_chunk helper."""
         # Minimal chunk (all optionals None)
-        chunk = _cloudflare._build_chunk("id1", 100, "m1")
+        chunk = build_chunk("id1", 100, "m1")
         assert chunk["id"] == "id1"
         assert chunk["choices"] == []
 
         # Content + role chunk
-        chunk2 = _cloudflare._build_chunk(
+        chunk2 = build_chunk(
             "id2", 200, "m2", delta_content="hi", delta_role="assistant"
         )
         assert chunk2["choices"][0]["delta"] == {"role": "assistant", "content": "hi"}
 
         # Finish reason with extra kwargs
-        chunk3 = _cloudflare._build_chunk(
-            "id3", 300, "m3", finish_reason="stop", x_tokens=42
-        )
+        chunk3 = build_chunk("id3", 300, "m3", finish_reason="stop", x_tokens=42)
         assert chunk3["choices"][0]["finish_reason"] == "stop"
         assert chunk3["x_tokens"] == 42
 
     @pytest.mark.asyncio
     async def test_make_chunk_id(self):
         """_make_chunk_id returns unique IDs with correct prefix."""
-        import llm_apipool.providers.cloudflare as cf
-
-        cid = cf._make_chunk_id()
+        cid = make_chunk_id()
         assert cid.startswith("chatcmpl-")
         assert len(cid) == 21  # "chatcmpl-" (9) + 12 hex chars

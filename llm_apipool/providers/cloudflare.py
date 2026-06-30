@@ -4,55 +4,16 @@ from __future__ import annotations
 
 import json
 import time
-import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
 import httpx
 
+from ._stream_utils import build_chunk, make_chunk_id
 from .base import CompletionResult
 from .headers import collect_rl_headers
 
 HTTP_429 = 429
-
-
-def _make_chunk_id() -> str:
-    return f"chatcmpl-{uuid.uuid4().hex[:12]}"
-
-
-def _build_chunk(
-    chunk_id: str,
-    created: int,
-    model: str,
-    delta_content: str | None = None,
-    delta_role: str | None = None,
-    finish_reason: str | None = None,
-    index: int = 0,
-    **extra: Any,  # noqa: ANN401
-) -> dict[str, Any]:
-    """Build an OpenAI-format streaming chunk dict."""
-    chunk: dict[str, Any] = {
-        "id": chunk_id,
-        "object": "chat.completion.chunk",
-        "created": created,
-        "model": model,
-        "choices": [],
-    }
-    if delta_content is not None or delta_role is not None or finish_reason is not None:
-        delta: dict[str, Any] = {}
-        if delta_role is not None:
-            delta["role"] = delta_role
-        if delta_content is not None:
-            delta["content"] = delta_content
-        chunk["choices"] = [
-            {
-                "index": index,
-                "delta": delta,
-                "finish_reason": finish_reason,
-            },
-        ]
-    chunk.update(extra)
-    return chunk
 
 
 async def _real_stream(
@@ -65,7 +26,7 @@ async def _real_stream(
     Calls the Cloudflare Workers AI endpoint with ``stream: True`` and
     yields OpenAI-format streaming chunks from the SSE event stream.
     """
-    chunk_id = _make_chunk_id()
+    chunk_id = make_chunk_id()
     created = int(time.time())
     model = key_data["model"]
     url = f"{key_data['base_url']}/{model}"
@@ -89,7 +50,7 @@ async def _real_stream(
                 headers=headers,
             ) as resp:
                 if resp.status_code == HTTP_429:
-                    yield _build_chunk(
+                    yield build_chunk(
                         chunk_id,
                         created,
                         model,
@@ -104,7 +65,7 @@ async def _real_stream(
                         continue
                     data_str = line[6:].strip()
                     if data_str == "[DONE]":
-                        yield _build_chunk(
+                        yield build_chunk(
                             chunk_id,
                             created,
                             model,
@@ -118,7 +79,7 @@ async def _real_stream(
 
                     text = data.get("response", "") or data.get("text", "")
                     if text:
-                        yield _build_chunk(
+                        yield build_chunk(
                             chunk_id,
                             created,
                             model,
@@ -126,28 +87,28 @@ async def _real_stream(
                             delta_role="assistant",
                         )
     except httpx.HTTPStatusError as e:
-        yield _build_chunk(
+        yield build_chunk(
             chunk_id,
             created,
             model,
             x_error=f"HTTP {e.response.status_code}",
         )
     except httpx.TimeoutException:
-        yield _build_chunk(
+        yield build_chunk(
             chunk_id,
             created,
             model,
             x_error="Request to Cloudflare timed out",
         )
     except httpx.RequestError as e:
-        yield _build_chunk(
+        yield build_chunk(
             chunk_id,
             created,
             model,
             x_error=f"Request error: {str(e)[:100]}",
         )
     except Exception as e:  # noqa: BLE001
-        yield _build_chunk(
+        yield build_chunk(
             chunk_id,
             created,
             model,

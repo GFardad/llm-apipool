@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { PageHeader } from '@/components/page-header'
@@ -31,6 +32,7 @@ const LOG_TYPE_CONFIG: Record<LogType, { icon: typeof Terminal; label: string; d
 }
 
 export function LogsPage() {
+  const navigate = useNavigate()
   const [logType, setLogType] = useState<LogType>('audit')
   const [logFormat, setLogFormat] = useState<LogFormat>('csv')
   const [startDate, setStartDate] = useState('')
@@ -228,8 +230,12 @@ export function LogsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground text-center py-8">
-                  No log data available
+                <div className="flex flex-col items-center text-center py-8">
+                  <FileText className="size-8 text-muted-foreground/40 mb-2" />
+                  <p className="text-sm text-muted-foreground">No logs yet</p>
+                  <p className="text-[11px] text-muted-foreground/60 mt-1">
+                    Logs appear once the proxy starts handling requests
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -247,7 +253,7 @@ export function LogsPage() {
               <p className="text-xs text-muted-foreground">
                 Logs are stored in the SQLite database. Use the settings page to configure log retention.
               </p>
-              <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => window.location.href = '/settings'}>
+              <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => navigate('/settings')}>
                 Configure Log Retention
               </Button>
             </CardContent>

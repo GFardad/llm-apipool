@@ -75,7 +75,9 @@ class BenchmarkRunner:
                 latency_ms = (t1 - t0) * 1000
 
                 response_text = (
-                    result.get("content", "") if isinstance(result, dict) else str(result)
+                    result.get("content", "")
+                    if isinstance(result, dict)
+                    else str(result)
                 )
                 token_count = (
                     result.get("tokens_out", 0) if isinstance(result, dict) else 0
@@ -89,7 +91,11 @@ class BenchmarkRunner:
                     (token_count / (latency_ms / 1000)) if latency_ms > 0 else 0
                 )
 
-                truncated = response_text[:500] + "..." if len(str(response_text)) > 500 else response_text
+                truncated = (
+                    response_text[:500] + "..."
+                    if len(str(response_text)) > 500
+                    else response_text
+                )
 
                 yield {
                     "type": "result",

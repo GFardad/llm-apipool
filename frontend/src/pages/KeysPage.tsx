@@ -57,7 +57,7 @@ interface ImportEntry { key: string; provider: string; base_url_override: string
 function MockSparkline({ values, color }: { values: number[]; color: string }) {
   const max = Math.max(...values, 1)
   return (
-    <div className="flex items-end gap-[2px] h-6">
+    <div className="flex items-end gap-0.5 h-6">
       {values.map((v, i) => (
         <div key={i} className="w-1.5 rounded-t-sm transition-all duration-300"
           style={{ height: `${(v / max) * 100}%`, backgroundColor: color, opacity: 0.4 + (v / max) * 0.6 }} />
@@ -355,12 +355,12 @@ export function KeysPage() {
           )}
         </div>
         <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)}
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <option value="">All Providers</option>
           {providers.map((p) => <option key={p} value={p}>{p}</option>)}
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <option value="all">All Status</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
@@ -556,7 +556,7 @@ export function KeysPage() {
                   </button>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="hidden sm:flex items-end gap-1"><MockSparkline values={sparkValues} color="hsl(346, 75%, 52%)" /></div>
+                  <div className="hidden sm:flex items-end gap-1"><MockSparkline values={sparkValues} color="hsl(var(--primary))" /></div>
                   <span className="text-[10px] text-muted-foreground tabular-nums">{totalRequests} req</span>
                    {activeKeys.length > 0 && (
                      <Badge className="bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/25 dark:border-emerald-500/30 text-[10px]">
@@ -1229,7 +1229,7 @@ function ProviderEffortModal({
           <select
             value={selectedPreset}
             onChange={(e) => setSelectedPreset(e.target.value)}
-            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="off">Off (use defaults)</option>
             {presetNames.map((n) => (

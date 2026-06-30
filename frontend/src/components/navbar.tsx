@@ -80,7 +80,7 @@ function Navbar() {
                 <>
                   {item.label}
                   {isActive && (
-                    <span className="absolute -bottom-[11px] left-1/2 -translate-x-1/2 size-1.5 rounded-full bg-primary animate-pulse-glow" />
+                    <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 size-2 rounded-full bg-primary shadow-glow animate-pulse-glow" />
                   )}
                 </>
               )}

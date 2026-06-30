@@ -9,6 +9,7 @@ import pytest
 def _reset_effort_state():
     """Reset effort module state between tests."""
     from llm_apipool.core import model_effort
+
     model_effort._cache = None
     # Reset any module-level state
     yield
@@ -28,6 +29,7 @@ def db_path():
 def store(db_path):
     """Create a KeyStore with a temp database."""
     from llm_apipool.key_store import KeyStore
+
     ks = KeyStore(db_path=str(db_path))
     ks._init_db()
     return ks

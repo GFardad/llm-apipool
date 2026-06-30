@@ -36,7 +36,13 @@ from llm_apipool.key_store import SCHEMA  # noqa: E402, F401
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
-    context.configure(url=url, target_metadata=None, literal_binds=True, compare_type=True, compare_server_default=True)
+    context.configure(
+        url=url,
+        target_metadata=None,
+        literal_binds=True,
+        compare_type=True,
+        compare_server_default=True,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
@@ -49,7 +55,12 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=None, compare_type=True, compare_server_default=True)
+        context.configure(
+            connection=connection,
+            target_metadata=None,
+            compare_type=True,
+            compare_server_default=True,
+        )
         with context.begin_transaction():
             context.run_migrations()
 

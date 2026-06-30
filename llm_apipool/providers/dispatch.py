@@ -18,6 +18,7 @@ from llm_apipool.core.model_effort import inject_effort_params
 from llm_apipool.proxy_logger import write_entry as log_proxy_entry
 
 from . import cloudflare as _cloudflare
+from ._stream_utils import make_chunk_id
 from . import cohere as _cohere
 from . import openai_compat
 from .base import CompletionResult
@@ -61,10 +62,6 @@ def _estimate_tokens(messages: list[dict[str, Any]]) -> int:
                     text = part.get("text", "")
                     total += len(enc.encode(text))
     return total
-
-
-def _make_chunk_id() -> str:
-    return f"chatcmpl-{uuid.uuid4().hex[:12]}"
 
 
 def _log_proxy_attempt(
@@ -146,6 +143,13 @@ async def complete(
 
     max_attempts = _max_attempts_for(rotator)
     _request_id = uuid.uuid4().hex[:12]
+    _last_error_type: str | None = None
+    """Tracks the dominant terminal-error class across retries.
+
+    ``"request_shape"`` — most recent failure was HTTP 400.
+    ``"rate_limit"`` — most recent failure was HTTP 429.
+    ``"transient"`` — most recent failure was 5xx / network / timeout.
+    """
 
     for attempt in range(max_attempts):
         key_data = rotator.get_best_key(
@@ -158,7 +162,11 @@ async def complete(
         )
         if not key_data:
             return CompletionResult(
-                text="", tokens_used=0, was_429=False, error="all_keys_exhausted"
+                text="",
+                tokens_used=0,
+                was_429=False,
+                error="all_keys_exhausted",
+                terminal_error_type=_last_error_type or "transient",
             ), None
 
         key_id = key_data["key_id"]
@@ -173,6 +181,12 @@ async def complete(
             result = await _call_complete(key_data, messages, **kwargs)
         except APIStatusError as exc:
             is_429 = exc.status_code == 429
+            if is_429:
+                _last_error_type = "rate_limit"
+            elif exc.status_code == 400:
+                _last_error_type = "request_shape"
+            else:
+                _last_error_type = "transient"
             result = CompletionResult(
                 text="",
                 tokens_used=0,
@@ -180,6 +194,7 @@ async def complete(
                 error=f"API error ({exc.status_code}): {str(exc)[:150]}",
             )
         except Exception as exc:
+            _last_error_type = "transient"
             result = CompletionResult(
                 text="",
                 tokens_used=0,
@@ -195,10 +210,17 @@ async def complete(
 
         if result.was_429:
             _log_proxy_attempt(
-                _request_id, subscriber_id, key_data, latency_ms,
-                status_code=429, tokens_in=0, tokens_out=0,
-                error=result.error or "429 rate limit", stream=False,
-                messages=messages, result=result,
+                _request_id,
+                subscriber_id,
+                key_data,
+                latency_ms,
+                status_code=429,
+                tokens_in=0,
+                tokens_out=0,
+                error=result.error or "429 rate limit",
+                stream=False,
+                messages=messages,
+                result=result,
             )
             rotator.handle_429(
                 key_id,
@@ -223,10 +245,17 @@ async def complete(
 
         if result.error:
             _log_proxy_attempt(
-                _request_id, subscriber_id, key_data, latency_ms,
-                status_code=500, tokens_in=0, tokens_out=0,
-                error=str(result.error)[:200], stream=False,
-                messages=messages, result=result,
+                _request_id,
+                subscriber_id,
+                key_data,
+                latency_ms,
+                status_code=500,
+                tokens_in=0,
+                tokens_out=0,
+                error=str(result.error)[:200],
+                stream=False,
+                messages=messages,
+                result=result,
             )
             rotator.handle_error(
                 key_id,
@@ -252,10 +281,17 @@ async def complete(
 
         tokens_in = _estimate_tokens(messages)
         _log_proxy_attempt(
-            _request_id, subscriber_id, key_data, latency_ms,
-            status_code=200, tokens_in=tokens_in, tokens_out=result.tokens_used,
-            error=None, stream=False,
-            messages=messages, result=result,
+            _request_id,
+            subscriber_id,
+            key_data,
+            latency_ms,
+            status_code=200,
+            tokens_in=tokens_in,
+            tokens_out=result.tokens_used,
+            error=None,
+            stream=False,
+            messages=messages,
+            result=result,
         )
         cb.record_success(key_data["provider"], key_data.get("model", ""), key_id)
         rotator.handle_success(
@@ -281,7 +317,11 @@ async def complete(
         return result, key_data
 
     return CompletionResult(
-        text="", tokens_used=0, was_429=False, error="max_retries_exceeded"
+        text="",
+        tokens_used=0,
+        was_429=False,
+        error="max_retries_exceeded",
+        terminal_error_type=_last_error_type or "transient",
     ), None
 
 
@@ -329,9 +369,15 @@ async def _stream_complete(
             is_429 = exc.status_code == 429
             lat = int((time.monotonic() - t0) * 1000)
             _log_proxy_attempt(
-                _request_id, subscriber_id, key_data, lat,
-                status_code=exc.status_code, tokens_in=0, tokens_out=0,
-                error=f"API error ({exc.status_code})", stream=True,
+                _request_id,
+                subscriber_id,
+                key_data,
+                lat,
+                status_code=exc.status_code,
+                tokens_in=0,
+                tokens_out=0,
+                error=f"API error ({exc.status_code})",
+                stream=True,
                 messages=messages,
             )
             if is_429:
@@ -370,9 +416,15 @@ async def _stream_complete(
         except Exception as exc:
             lat = int((time.monotonic() - t0) * 1000)
             _log_proxy_attempt(
-                _request_id, subscriber_id, key_data, lat,
-                status_code=500, tokens_in=0, tokens_out=0,
-                error=f"{type(exc).__name__}: {str(exc)[:200]}", stream=True,
+                _request_id,
+                subscriber_id,
+                key_data,
+                lat,
+                status_code=500,
+                tokens_in=0,
+                tokens_out=0,
+                error=f"{type(exc).__name__}: {str(exc)[:200]}",
+                stream=True,
                 messages=messages,
             )
             rotator.handle_error(
@@ -399,9 +451,15 @@ async def _stream_complete(
         if not isinstance(result, AsyncGenerator):
             lat = int((time.monotonic() - t0) * 1000)
             _log_proxy_attempt(
-                _request_id, subscriber_id, key_data, lat,
-                status_code=500, tokens_in=0, tokens_out=0,
-                error="non-stream result for streaming call", stream=True,
+                _request_id,
+                subscriber_id,
+                key_data,
+                lat,
+                status_code=500,
+                tokens_in=0,
+                tokens_out=0,
+                error="non-stream result for streaming call",
+                stream=True,
                 messages=messages,
             )
             rotator.handle_error(
@@ -425,9 +483,16 @@ async def _stream_complete(
         except StopAsyncIteration:
             lat = int((time.monotonic() - t0) * 1000)
             _log_proxy_attempt(
-                _request_id, subscriber_id, key_data, lat,
-                status_code=500, tokens_in=0, tokens_out=0,
-                error="empty stream", stream=True, messages=messages,
+                _request_id,
+                subscriber_id,
+                key_data,
+                lat,
+                status_code=500,
+                tokens_in=0,
+                tokens_out=0,
+                error="empty stream",
+                stream=True,
+                messages=messages,
             )
             rotator.handle_error(
                 key_id,
@@ -444,9 +509,16 @@ async def _stream_complete(
         except asyncio.TimeoutError:
             lat = int((time.monotonic() - t0) * 1000)
             _log_proxy_attempt(
-                _request_id, subscriber_id, key_data, lat,
-                status_code=500, tokens_in=0, tokens_out=0,
-                error="TTFT timeout", stream=True, messages=messages,
+                _request_id,
+                subscriber_id,
+                key_data,
+                lat,
+                status_code=500,
+                tokens_in=0,
+                tokens_out=0,
+                error="TTFT timeout",
+                stream=True,
+                messages=messages,
             )
             rotator.handle_error(
                 key_id,
@@ -471,9 +543,15 @@ async def _stream_complete(
         except Exception as exc:
             lat = int((time.monotonic() - t0) * 1000)
             _log_proxy_attempt(
-                _request_id, subscriber_id, key_data, lat,
-                status_code=500, tokens_in=0, tokens_out=0,
-                error=f"{type(exc).__name__}: {str(exc)[:200]}", stream=True,
+                _request_id,
+                subscriber_id,
+                key_data,
+                lat,
+                status_code=500,
+                tokens_in=0,
+                tokens_out=0,
+                error=f"{type(exc).__name__}: {str(exc)[:200]}",
+                stream=True,
                 messages=messages,
             )
             rotator.handle_error(
@@ -492,9 +570,15 @@ async def _stream_complete(
         if first_chunk.get("x_error"):
             lat = int((time.monotonic() - t0) * 1000)
             _log_proxy_attempt(
-                _request_id, subscriber_id, key_data, lat,
-                status_code=500, tokens_in=0, tokens_out=0,
-                error=first_chunk.get("x_error", "provider error")[:200], stream=True,
+                _request_id,
+                subscriber_id,
+                key_data,
+                lat,
+                status_code=500,
+                tokens_in=0,
+                tokens_out=0,
+                error=first_chunk.get("x_error", "provider error")[:200],
+                stream=True,
                 messages=messages,
             )
             if first_chunk.get("x_was_429"):
@@ -525,9 +609,15 @@ async def _stream_complete(
         ttfb_ms = int((time.monotonic() - t0) * 1000)
         rest = _prepend_chunk(first_chunk, result)
         gen = _wrap_stream_lifecycle(
-            rest, rotator, key_data, subscriber_id, messages,
-            _request_id=_request_id, ttfb_ms=ttfb_ms,
-            http_method=http_method, path=path,
+            rest,
+            rotator,
+            key_data,
+            subscriber_id,
+            messages,
+            _request_id=_request_id,
+            ttfb_ms=ttfb_ms,
+            http_method=http_method,
+            path=path,
         )
         return gen, key_data
 
@@ -539,7 +629,7 @@ def _error_generator(error: str, model: str) -> AsyncGenerator[dict[str, Any], N
 
     async def _gen() -> AsyncGenerator[dict[str, Any], None]:
         yield {
-            "id": _make_chunk_id(),
+            "id": make_chunk_id(),
             "object": "chat.completion.chunk",
             "created": int(time.time()),
             "model": model,
@@ -581,8 +671,14 @@ async def _wrap_stream_lifecycle(
                 error_msg = str(x_err)[:200]
                 if chunk.get("x_was_429"):
                     rotator.handle_429(
-                        key_id, provider, {}, subscriber_id=subscriber_id, model=model,
-                        is_streaming=True, http_method=http_method, path=path,
+                        key_id,
+                        provider,
+                        {},
+                        subscriber_id=subscriber_id,
+                        model=model,
+                        is_streaming=True,
+                        http_method=http_method,
+                        path=path,
                     )
                 else:
                     rotator.handle_error(
@@ -625,19 +721,30 @@ async def _wrap_stream_lifecycle(
         # Write proxy log entry for the completed stream
         if _request_id:
             _log_proxy_attempt(
-                _request_id, subscriber_id, key_data, latency_ms,
+                _request_id,
+                subscriber_id,
+                key_data,
+                latency_ms,
                 status_code=200 if not error_msg else 500,
-                tokens_in=tokens_in, tokens_out=tokens_used,
-                error=error_msg, stream=True,
+                tokens_in=tokens_in,
+                tokens_out=tokens_used,
+                error=error_msg,
+                stream=True,
                 messages=messages,
             )
     except Exception:
         lat = int((time.monotonic() - t0) * 1000)
         if _request_id:
             _log_proxy_attempt(
-                _request_id, subscriber_id, key_data, lat,
-                status_code=500, tokens_in=tokens_in, tokens_out=tokens_used,
-                error="stream exception", stream=True,
+                _request_id,
+                subscriber_id,
+                key_data,
+                lat,
+                status_code=500,
+                tokens_in=tokens_in,
+                tokens_out=tokens_used,
+                error="stream exception",
+                stream=True,
                 messages=messages,
             )
         rotator.handle_error(

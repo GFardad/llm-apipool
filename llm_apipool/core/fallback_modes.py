@@ -44,12 +44,8 @@ class FallbackModes:
         self._active_mode: str = self.MODE_FALLBACK
         self._modes: dict[str, FallbackModeConfig] = {
             self.MODE_FALLBACK: FallbackModeConfig(enabled=True),
-            self.MODE_STICKY: FallbackModeConfig(
-                enabled=False, sticky_enabled=True
-            ),
-            self.MODE_SLIMEY: FallbackModeConfig(
-                enabled=False, affinity_enabled=True
-            ),
+            self.MODE_STICKY: FallbackModeConfig(enabled=False, sticky_enabled=True),
+            self.MODE_SLIMEY: FallbackModeConfig(enabled=False, affinity_enabled=True),
         }
 
     def get_active_mode(self) -> str:

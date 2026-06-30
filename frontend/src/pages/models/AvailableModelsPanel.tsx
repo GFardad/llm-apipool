@@ -152,7 +152,7 @@ export function AvailableModelsPanel() {
         <select
           value={providerFilter}
           onChange={(e) => setProviderFilter(e.target.value)}
-          className="h-7 rounded border border-input bg-background px-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+           className="h-7 rounded border border-input bg-background px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           <option value="">All providers</option>
           {providers.map((p) => (
@@ -163,7 +163,7 @@ export function AvailableModelsPanel() {
         <select
           value={tierFilter ?? ''}
           onChange={(e) => setTierFilter(e.target.value ? parseInt(e.target.value) : null)}
-          className="h-7 rounded border border-input bg-background px-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-ring"
+           className="h-7 rounded border border-input bg-background px-2 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           <option value="">All tiers</option>
           {[1, 2, 3, 4].map((t) => (

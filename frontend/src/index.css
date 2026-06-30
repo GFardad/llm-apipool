@@ -208,6 +208,29 @@ body::after {
 [data-stagger] > *:nth-child(9)  { animation-delay: 0.42s; }
 [data-stagger] > *:nth-child(10) { animation-delay: 0.47s; }
 
+/* ── Reduced motion ──────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  [data-stagger] > * {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+  .card-hover:hover,
+  .card-hover-dramatic:hover {
+    transform: none !important;
+  }
+  .skeleton {
+    animation: none !important;
+  }
+}
+
 /* ── Card refinements ───────────────────────────────────────────────── */
 .card-hover {
   @apply transition-all duration-300;
@@ -225,6 +248,17 @@ body::after {
 .card-hover-dramatic:hover {
   box-shadow: var(--shadow-glow);
   @apply -translate-y-1 scale-[1.01];
+}
+
+/* Crimson-tinted card hover — for key data cards and metrics */
+.card-hover-brand {
+  @apply transition-all duration-300;
+  box-shadow: var(--shadow-card);
+}
+.card-hover-brand:hover {
+  box-shadow: var(--shadow-elevated);
+  border-color: hsl(346 85% 45% / 0.3);
+  @apply -translate-y-0.5;
 }
 
 /* ── Glassmorphism ──────────────────────────────────────────────────── */

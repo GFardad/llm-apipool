@@ -42,6 +42,7 @@ class EffortParam(TypedDict):
     max: NotRequired[int | float]
     depends_on: NotRequired[str]
 
+
 EffortPreset = dict[str, EffortParam | dict[str, EffortParam]]
 
 # Provider-level defaults and per-model overrides
