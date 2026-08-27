@@ -22,7 +22,7 @@
     "@radix-ui/react-tooltip": "^1.2.10",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-table": "^8.0.0",
-    "axios": "^1.6.0",
+    "axios": "^1.18.1",
     "fuse.js": "^7.4.2",
     "lucide-react": "^0.300.0",
     "react": "^18.2.0",
